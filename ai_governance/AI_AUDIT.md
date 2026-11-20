@@ -105,5 +105,5 @@
                     np.where(target["release_date"] <= d_val, "val", "test"))
   assert dates.max()["train"] < dates.min()["val"] and dates.max()["val"] < dates.min()["test"]
   ```
-- **Impact:** 13 games change split; the splits become 7,007 / 1,499 / 1,494 games instead of 7,000 / 1,500 / 1,500. The threshold stays at 66 reviews and the success rates barely move (13.2% / 15.7% / 14.9%). Small effect here, but the split is now a true cut in time and does not depend on the row order of the file.
+- **Impact:** 13 games change split; the splits become 7,007 / 1,499 / 1,494 games instead of 7,000 / 1,500 / 1,500. The threshold stays at 66 reviews and the success rates barely move (13.2% / 15.7% / 14.9%). Small effect here, but the split is now a true cut in time and does not depend on the row order of the file. With this split (read from `target.parquet` by Modules 3 and 4), the validation PR-AUC of the baseline at T = 0 goes from 0.411 to 0.407, and 167 tags are kept instead of 168.
 

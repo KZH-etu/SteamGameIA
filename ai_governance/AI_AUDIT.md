@@ -71,3 +71,19 @@
   (OneHotEncoder(handle_unknown="ignore"), CAT_COLS),
   ```
 - **Impact:** validation PR-AUC of the logistic regression before the fix: 0.442 (T = 0), 0.751 (T = 7), 0.811 (T = 30), 0.847 (T = 90). After the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). No measurable gain: the differences are below 0.01 and probably within noise (to be confirmed with the bootstrap confidence intervals of Module 2). The release month and weekday carry little signal. The fix is kept because the encoding is now correct and the coefficients can be interpreted month by month. Lesson: a fix can be right without improving the metric.
+
+### Flaw 5 – Steam categories added after release kept as features → leakage (Module 3 – Jason ZOH)
+- **AI output:** the first Module 3 notebook encoded every category present in at least 1% of the train games, and its leakage audit classified all categories as "kept, low risk":
+  ```python
+  for col, prefix in [("genres", "genre_"), ("categories", "cat_"), ("tags", "tag_")]:
+      dummies = games[col].str.get_dummies(sep=",").add_prefix(prefix)
+      keep = dummies.columns[dummies[is_train].mean() >= 0.01]
+  ```
+  | `price_original`, `description`, `languages`, `categories`, `genres` | kept, low risk | ... |
+- **Problem:** the FronkonGames categories are read when the dataset was collected, not at release. Several of them describe Steam features that did not exist when our games were released (Remote Play Together appeared in 2019, yet 10.5% of the 2015 games have it), or that are only granted after commercial success (since 2017, Steam Trading Cards are enabled only after a sales threshold). They are added later, mostly by the developers of games that are still active, i.e. successful. Root cause: the AI treated "categories" as a fixed description of the game, without checking when each one could have been added.
+- **How we detected it:** reading the coefficients of the Module 4 baseline (logistic regression at T = 0). `cat_Remote Play on Tablet` was among the strongest positive coefficients (+1.17). We then checked on the train set: 66.7% of the games with this category are successes (15.2% without), and 43% of the games released from 2018 with trading cards (12% without). The share of games with each category by release year confirmed it: features created in 2019 are present on 2015 games, and trading cards drop from 62% (2015) to 9% (2021) because older games had more time to obtain them.
+- **Fix:** 9 categories removed from `features_static` (4 Remote Play, Family Sharing, Steam Trading Cards, 3 accessibility categories), with the evidence table kept in the notebook:
+  ```python
+  static = static.drop(columns=late_cols)
+  ```
+- **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: <to fill in after re-running 04_baseline.ipynb with the new features>.

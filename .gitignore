@@ -1,8 +1,9 @@
-# Données (trop lourdes pour git / Moodle)
+# Données brutes (trop lourdes pour git, à télécharger : voir README)
 data/raw/*
-data/processed/*
 !data/raw/.gitkeep
-!data/processed/.gitkeep
+
+# Données traitées : versionnées, sauf le fichier d'avis (trop lourd, partagé sur le Drive)
+data/processed/reviews_clean.parquet
 
 # Environnements Python
 .venv/

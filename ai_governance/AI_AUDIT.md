@@ -87,3 +87,23 @@
   static = static.drop(columns=late_cols)
   ```
 - **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: 0.411 (T = 0), 0.746 (T = 7), 0.812 (T = 30), 0.850 (T = 90). The score at T = 0 drops by 0.024: part of the previous score came from information that is not available at release, so 0.411 is the honest score. At T >= 7 nothing changes, because the early reviews carry much more information than these categories. No removed category appears any more among the strongest coefficients.
+
+### Flaw 6 – Games released on the same day split between train and validation (Module 2 – Arthur DISERBEAU)
+- **AI output:** the temporary split written by the AI for Modules 3 and 4 cut on the **rank** of each game by release date:
+  ```python
+  rank = games["release_date"].rank(method="first") / len(games)
+  games["split"] = np.where(rank <= SPLIT[0], "train",
+                   np.where(rank <= SPLIT[0] + SPLIT[1], "val", "test"))
+  ```
+- **Problem:** `method="first"` breaks ties by the row order in the file. Games released on the same day as the 70% cut are therefore split arbitrarily between train and validation: the "past" (train) and the "future" (validation) overlap on that day, and the result depends on the row order instead of the date. Root cause: the AI implemented "oldest 70%" as a count of rows, not as a cut in time.
+- **How we detected it:** the table printed by Module 3 showed that the train ends on 2020-05-20 and the validation starts on the same day. Counting the games released that day: 8 games, 1 in train and 7 in validation.
+- **Fix:** cut on the dates, so that a release day belongs to a single split, and check it with an assert:
+  ```python
+  d_train = target["release_date"].quantile(SPLIT[0])
+  d_val = target["release_date"].quantile(SPLIT[0] + SPLIT[1])
+  target["split"] = np.where(target["release_date"] <= d_train, "train",
+                    np.where(target["release_date"] <= d_val, "val", "test"))
+  assert dates.max()["train"] < dates.min()["val"] and dates.max()["val"] < dates.min()["test"]
+  ```
+- **Impact:** 13 games change split; the splits become 7,007 / 1,499 / 1,494 games instead of 7,000 / 1,500 / 1,500. The threshold stays at 66 reviews and the success rates barely move (13.2% / 15.7% / 14.9%). Small effect here, but the split is now a true cut in time and does not depend on the row order of the file.
+

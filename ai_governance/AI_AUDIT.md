@@ -86,4 +86,4 @@
   ```python
   static = static.drop(columns=late_cols)
   ```
-- **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: <to fill in after re-running 04_baseline.ipynb with the new features>.
+- **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: 0.411 (T = 0), 0.746 (T = 7), 0.812 (T = 30), 0.850 (T = 90). The score at T = 0 drops by 0.024: part of the previous score came from information that is not available at release, so 0.411 is the honest score. At T >= 7 nothing changes, because the early reviews carry much more information than these categories. No removed category appears any more among the strongest coefficients.

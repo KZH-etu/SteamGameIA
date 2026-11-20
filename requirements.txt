@@ -1,0 +1,10 @@
+# À figer avec `pip freeze > requirements.txt` une fois l'environnement installé
+numpy
+pandas
+pyarrow
+scikit-learn
+scipy
+matplotlib
+seaborn
+jupyter
+ipykernel

@@ -1,0 +1,9 @@
+# Prompt Log
+
+<!-- Modèle d'entrée :
+### Entry N – <titre> (Module X – <prénom>)
+- **Goal:** ...
+- **Bare prompt (v1):** "..."  → problem with the answer: ...
+- **Constrained prompt (v2):** "..." (schema, leakage boundaries, assumptions, fallback)
+- **What we kept / changed:** ...
+-->

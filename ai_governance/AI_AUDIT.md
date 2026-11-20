@@ -39,9 +39,9 @@
   )
   ```
 - **Problem:** filtering on `days < T` only restricts the **date of the review**, not the date at which the other columns were measured. `helpful` is a vote counter read when the dataset was collected, so a review posted on day 3 carries every vote it received in the following years. `hours` has the same problem: it is the playtime at collection time, not at review time. Both features therefore contain information from after T. Root cause: the AI assumed that every column of a review is measured at the review date.
-- **How we detected it:** leakage audit, column by column, asking "is this value known at T?". For `hours`, the describe() of the T = 30 signals showed `hours_mean` up to 903.8 h, more than the 720 h in 30 days. We then checked that 13.5% of the reviews posted in the first 30 days have more hours than the time elapsed since release (`hours > 24 * (days + 1)`), e.g. 149 h two days after release (app 275850).
+- **How we detected it:** leakage audit, column by column, asking "is this value known at T?". For `hours`, the describe() of the T = 30 signals showed `hours_mean` up to 903.8 h, more than the 720 h in 30 days. We then checked that 13.6% of the reviews posted in the first 30 days have more hours than the time elapsed since release (`hours > 24 * (days + 1)`), e.g. 149 h two days after release (app 275850).
 - **Fix:** `helpful`, `hours_mean` and `hours_median` are removed. `features_T{7,30,90}` only keep `n_reviews`, `pos_ratio` and `has_reviews`. The check stays in the notebook (section 3).
-- **Impact:** 13.5% of the early reviews (131,855 out of 972,838) had impossible hours, so the hours features mixed future information into 1,701 games. Effect on the model: <to fill in with Module 4: validation PR-AUC at T = 30 with and without the hours features>
+- **Impact:** 13.6% of the early reviews (131,855 out of 972,838) had impossible hours, so the hours features mixed future information into 1,701 games. Effect on the model: <to fill in with Module 4: validation PR-AUC at T = 30 with and without the hours features>
 
 ### Flaw 3 – Language lists parsed with `ast.literal_eval` → crash (Module 3 – <Prénom NOM>)
 - **AI output:** to count the languages stored as text lists (`"['English', 'French']"`), the AI read each string as a Python list:

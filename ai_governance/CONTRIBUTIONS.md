@@ -3,7 +3,7 @@
 | Module | Intitulé | Responsable |
 |---|---|---|
 | 1 | Données : chargement, nettoyage, fusion | Yohan ALLOUCHE |
-| 2 | Cible et découpage train / validation / test | Arthur <NOM> |
+| 2 | Cible et découpage train / validation / test | Arthur DISERBEAU |
 | 3 | Variables et analyse exploratoire | Jason ZOH |
 | 4 | Baseline et évaluation | Lucas GREZES |
 

@@ -1,0 +1,458 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\setlist{itemsep=2pt, topsep=4pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+
+% Values still to be filled in after the final run of the notebooks
+\newcommand{\tbd}[1]{\textcolor{red}{#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{\textbf{Predicting the Success of Steam Games}\\[4pt]
+\large Week 2 Report -- Data preparation, target, splits and baseline}
+\author{Yohan ALLOUCHE \and Arthur DISERBEAU \and Jason ZOH \and Lucas GREZES\\[4pt]
+\small ESILV -- A4 -- Machine Learning}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+
+% =====================================================================
+\section{Project and team}
+
+Our goal is to predict if a Steam game will be a \textbf{success one year after its release}.
+A game is a success if:
+\begin{itemize}
+  \item it is in the \textbf{top 20\%} of games for the number of reviews in its first year, and
+  \item it has \textbf{at least 80\%} positive reviews in its first year.
+\end{itemize}
+The number of reviews measures popularity. The share of positive reviews measures satisfaction.
+A game that is played a lot but disliked is not a success.
+
+We make the prediction at different times $T$ after the release: $T = 0$ (only information known at release),
+and $T = 7$, $30$ and $90$ days (we also use the first reviews).
+
+We split the work into four modules. Each module has one owner, one notebook and one branch on Git.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+Module & Owner & Main output \\
+\midrule
+1 -- Data & Yohan ALLOUCHE & \code{games\_clean}, \code{reviews\_clean} (cleaning, merging, sampling) \\
+2 -- Target and splits & Arthur DISERBEAU & \code{target.parquet} (success label, train / validation / test) \\
+3 -- Features and EDA & Jason ZOH & \code{features\_static}, \code{features\_T7/T30/T90}, leakage audit \\
+4 -- Baseline and evaluation & Lucas GREZES & pipeline, baseline models, \code{results.csv} \\
+\bottomrule
+\end{tabularx}
+\caption{Team organisation.}
+\end{table}
+
+The table below shows which module answers each task of week 2.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{X l}
+\toprule
+Week 2 task & Modules \\
+\midrule
+1. Clean and preprocess the dataset & 1 (raw cleaning), 3 (features), 4 (imputation and scaling) \\
+2. Analyze features, missing values and target distribution & 3 (features), 2 (target) \\
+3. Define training, validation and test sets & 2 \\
+4. Select and implement a baseline model & 4 \\
+5. Evaluate initial performance with appropriate metrics & 4 \\
+\bottomrule
+\end{tabularx}
+\caption{Link between the week 2 tasks and our modules.}
+\end{table}
+
+% =====================================================================
+\section{Task 1 -- Clean and preprocess the dataset}
+
+\subsection{Data sources}
+
+We use two public datasets.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l r X}
+\toprule
+File & Rows & What we use \\
+\midrule
+Kozyriev \code{recommendations.csv} & about 41 M & one row per review: game, date, positive or not \\
+Kozyriev \code{games.csv} & 50,872 & release date, base price, platforms \\
+FronkonGames \code{games.csv} & 125,855 & languages, description, genres, categories, tags, age \\
+\bottomrule
+\end{tabularx}
+\caption{Raw data.}
+\end{table}
+
+\subsection{Loading the files}
+
+The review file is very big (2 GB). We load only the useful columns with small types
+(\code{int32}, \code{bool}, \code{float32}).
+Our first version kept every chunk of the file in memory, and the kernel crashed.
+Now we read the file in chunks and we keep only the reviews of our sampled games inside the loop.
+
+The FronkonGames file had a broken header. Two column names were stuck together
+(\code{DiscountDLC count}), so every column after \code{Price} was shifted by one.
+Before the fix, the \code{AppID} column contained game names and no game matched Kozyriev.
+After the fix, 39,436 games are shared (77.5\% of the Kozyriev games).
+
+Dates are parsed with a fixed format. A date that cannot be read becomes empty and is counted. It is not removed silently.
+
+\subsection{Sampling by game}
+
+To work fast, we keep the games released between 2015 and 2021, and we draw \textbf{10,000 games} at random (seed 42).
+We sample \textbf{by game}, never by review: we keep all the reviews of each sampled game.
+If we sampled review rows, the number of reviews per game would be wrong, so the target would be wrong too.
+
+\subsection{Cleaning the reviews}
+
+For each review, we compute \code{days}, the number of days between the release and the review.
+We found 470,961 reviews with \code{days} $< 0$ (6.45\%). They were posted before the official release, during early access.
+We remove them, because the target and the early signals start at the release.
+We keep 6,833,248 reviews.
+
+We do not remove identical review rows. Two players can post a review on the same game, on the same day, with the same values.
+These rows are not real duplicates.
+
+\subsection{Merging the two game tables}
+
+We merge the two game tables on \code{app\_id} with a \textbf{left join}. Kozyriev is the base table.
+\begin{itemize}
+  \item A left join keeps all the sampled games, even the ones missing in FronkonGames.
+  \item \code{validate="one\_to\_one"} raises an error if a game appears twice, so no row can be duplicated.
+\end{itemize}
+Result: 7,797 games are found in FronkonGames and 2,203 are missing. Their FronkonGames columns stay empty.
+We also compared the two release dates: 143 games have a difference of more than 30 days. We keep the Kozyriev date.
+
+At this step we also remove the columns measured after the release, such as the rating, the number of reviews,
+the final price and the discount. They would leak the future into the model.
+
+\subsection{From clean data to features}
+
+Module 3 turns the clean tables into features.
+
+\textbf{Static features (known at release, $T = 0$):}
+\begin{itemize}
+  \item \code{log\_price} ($\log(1 + \text{price})$, because prices are very skewed) and \code{is\_free};
+  \item platforms (\code{win}, \code{mac}, \code{linux}) and \code{required\_age};
+  \item \code{n\_languages}, release month and weekday, description length;
+  \item genres, categories and tags as 0/1 columns (multi-hot encoding). A game can have several tags, so it can have several 1s.
+\end{itemize}
+We keep a genre, category or tag only if it appears in at least 1\% of the \textbf{training} games.
+A rare tag teaches nothing general to the model. And if we used all games to count, the validation and test games
+would influence the choice of the features. In the end we have 217 columns: 11 simple features, 14 genres, 24 categories and 167 tags.
+
+To count the languages, we first tried to read the text list as a Python list, but it crashed:
+some names contain an unescaped apostrophe (\code{K'iche'}). We now count the commas.
+This gives exactly the same result on all readable lists.
+
+\textbf{Early signals (for $T = 7, 30, 90$):} for each game, with the reviews posted before $T$ days,
+we compute the number of reviews, the share of positive reviews and a flag \code{has\_reviews}.
+We start from all games: a game with no review gets \code{n\_reviews} $= 0$, and its share of positive reviews stays empty
+(it is unknown, it is not 0).
+
+\textbf{No imputation and no scaling at this step.} Missing values are filled with the median and features are scaled
+\textbf{inside the model pipeline} (Module 4). The pipeline learns the median and the scale on the training set only.
+If we did it before the split, information from the validation set would leak into the training.
+
+% =====================================================================
+\section{Task 2 -- Analyze features, missing values and target distribution}
+
+\subsection{Missing values}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+Feature & Train & Validation & Test \\
+\midrule
+FronkonGames columns (languages, age, description) & 21.6\% & 22.7\% & 23.1\% \\
+\code{pos\_ratio} at $T = 30$ & 27.8\% & 25.4\% & 25.9\% \\
+\code{log\_price}, \code{n\_reviews}, \code{success} & 0\% & 0\% & 0\% \\
+\bottomrule
+\end{tabular}
+\caption{Share of missing values by split.}
+\end{table}
+
+The FronkonGames columns are empty for the 22\% of games missing in this dataset.
+The rate is almost the same in the three splits, so it does not depend on the release date.
+\code{pos\_ratio} is empty when a game has no review before $T$.
+The target has no missing value: a game without reviews is a failure, not a missing value.
+
+\subsection{Distributions and outliers}
+
+\begin{itemize}
+  \item \textbf{Price:} 19\% of the games are free. The maximum is 269.99.
+  \item \textbf{Languages:} most games have one language. 65 games declare 103 languages.
+        These are small casual games that tick every language. It is not a reading error, but it is not reliable.
+  \item \textbf{Description length:} median of about 1,100 characters, maximum of 67,520.
+  \item \textbf{Reviews:} very skewed. In the first year, the median is 12 reviews and the maximum is 71,110.
+\end{itemize}
+We do not remove these values. They are real games, and removing them would bias the sample.
+We use a log transform for the skewed features, and tree models are not sensitive to outliers.
+
+\subsection{Correlations}
+
+We use the Spearman correlation on the training set. It works on ranks, so a few games with 40,000 reviews do not dominate it.
+\begin{itemize}
+  \item The number of reviews at $T = 30$ is the feature most linked to success (0.53).
+  \item Among the features known at release, the number of languages is the most linked to success (0.23).
+        Price, age and description length are weakly linked (0.09 to 0.11).
+  \item The share of positive reviews at $T = 30$ is almost not linked to success (0.07).
+        With only one or two reviews, it is often 0\% or 100\%, so it is very noisy.
+\end{itemize}
+A correlation is not a cause. For example, many languages can simply mean a bigger publisher.
+
+\subsection{Leakage audit}
+
+A feature is allowed only if its value is known at the time of the prediction.
+We checked every column. The main exclusions are listed below.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+Excluded column & Reason \\
+\midrule
+rating, positive ratio, number of reviews (game tables) & measured after release, almost equal to the target \\
+final price, discount, Steam Deck & measured when the data was collected, not at release \\
+DLC count & grows after release, mostly for successful games \\
+release year & with a time split, the test years never appear in the training set \\
+\code{helpful} votes (reviews) & votes keep being added after $T$ \\
+\code{hours} played (reviews) & read at collection time: 13.6\% of the reviews of the first 30 days have more hours than the time since release \\
+9 Steam categories (Remote Play, Family Sharing, Trading Cards, accessibility) & added after release, mostly by successful games \\
+\bottomrule
+\end{tabularx}
+\caption{Columns excluded to avoid data leakage.}
+\end{table}
+
+Two of these leaks were not obvious.
+For \code{hours}, we checked that a review posted $d$ days after release cannot have more than $24 \times (d+1)$ hours.
+13.6\% of the early reviews break this rule (for example, 149 hours two days after release).
+For the Steam categories, \emph{Remote Play Together} appears on 10.5\% of the games released in 2015,
+but this feature was created in 2019. And since 2017, trading cards are only given after a sales threshold.
+We found this leak by reading the coefficients of our baseline (Section~\ref{sec:baseline}).
+
+The tags are kept, but they are a risk: players can add tags after the release.
+We keep only the presence of a tag (0/1), not the number of tags.
+
+\subsection{Target distribution}
+
+The threshold for the top 20\% is \textbf{66 reviews} in the first year (computed on the training set).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l r r}
+\toprule
+Training set & $\geq 80\%$ positive & $< 80\%$ positive or no review \\
+\midrule
+Top 20\% for reviews & \textbf{924 (success)} & 483 \\
+Other games & 2,107 & 3,493 \\
+\bottomrule
+\end{tabular}
+\caption{The two conditions of the target on the training set (7,007 games).}
+\end{table}
+
+\begin{itemize}
+  \item The classes are \textbf{imbalanced}: about 1 game out of 7 is a success. A model that always says ``failure''
+        would get about 87\% accuracy on the training set without learning anything. So accuracy is not a good metric here.
+  \item 2,200 games (22\%) have no review in their first year. We keep them as failures.
+        If we started from the review table, they would disappear and we would overestimate the success rate (survivorship bias).
+  \item The satisfaction condition removes about one third of the popular games (483 out of 1,407).
+  \item The success rate \textbf{changes over time}. It is about 15--17\% in 2015, it drops to 8--13\% between late 2016 and 2018,
+        and it goes back to 15--18\% from mid-2019. One possible reason is the opening of Steam Direct in 2017,
+        which brought many small games to the store.
+        Because of this shift, the validation set (15.7\%) and the test set (14.9\%) have more successes than the training set (13.2\%).
+\end{itemize}
+
+% =====================================================================
+\section{Task 3 -- Define training, validation and test sets}
+
+We split the games \textbf{by release date}, not at random.
+The model must predict the success of future games from past games.
+A random split would put games from 2021 in the training set and games from 2016 in the test set.
+The model would ``see the future'' and its score would be too optimistic.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l l r r}
+\toprule
+Split & Release dates & Games & Success rate \\
+\midrule
+Train (70\%) & 2015-01-01 to 2020-05-20 & 7,007 & 13.2\% \\
+Validation (15\%) & 2020-05-21 to 2021-03-29 & 1,499 & 15.7\% \\
+Test (15\%) & 2021-03-30 to 2021-12-31 & 1,494 & 14.9\% \\
+\bottomrule
+\end{tabular}
+\caption{Time-based split.}
+\end{table}
+
+\begin{itemize}
+  \item We cut on the dates themselves, so games released on the same day are always in the same split.
+        Our first version cut on the rank of the games, and 8 games released on 2020-05-20 were split between train and validation.
+  \item All games have a full year of reviews (the last review is from 2022-12-31), so no game is removed.
+  \item The top 20\% threshold is computed on the \textbf{training set only}, then used for all splits.
+        Computing it on all games would be leakage: the validation and test games would change the definition of the target.
+  \item All modules read the same file (\code{target.parquet}), so they all use the same split.
+  \item The validation set is used for every choice. The \textbf{test set is used only once}, at the very end, for the final model.
+\end{itemize}
+
+% =====================================================================
+\section{Task 4 -- Select and implement a baseline model}
+\label{sec:baseline}
+
+\subsection{Pipeline}
+
+We build one dataset for each $T$: static features, plus the early signals when $T > 0$.
+The model is a scikit-learn \code{Pipeline}:
+\begin{itemize}
+  \item numerical features: median imputation, then \code{StandardScaler};
+  \item release month and weekday: \code{OneHotEncoder}. They are categories, not quantities: December (12) is not ``12 times'' January (1);
+  \item 0/1 features (genres, tags, platforms): unchanged.
+\end{itemize}
+The pipeline is fitted on the training set only. The validation set is only transformed.
+
+\subsection{Models}
+
+\begin{itemize}
+  \item \code{DummyClassifier(strategy="most\_frequent")}: it always predicts ``failure''. It is the floor to beat.
+  \item \code{LogisticRegression(class\_weight="balanced")}: it gives more weight to the rare successes.
+\end{itemize}
+
+\subsection{Why logistic regression is our baseline}
+
+We do not look for the best model at this step. We want a solid reference for the next models.
+\begin{itemize}
+  \item It clearly beats the Dummy model at every $T$ (Section~\ref{sec:eval}).
+  \item It is \textbf{interpretable}: one coefficient per feature. This is how we found the leak in the Steam categories:
+        \emph{Remote Play on Tablet} had one of the strongest positive coefficients, with 66.7\% of successes in the training set.
+  \item It has only one real hyperparameter (the regularization $C$), so it is simple and reproducible (fixed seed).
+  \item It handles the imbalance with \code{class\_weight}, without resampling.
+  \item It gives probabilities, which we need for the PR-AUC and to choose a decision threshold later.
+  \item It is fast and we saw it in class.
+\end{itemize}
+
+At $T = 0$, the coefficients make sense: niche genres with loyal players (visual novels, detective games) push towards success,
+while violent games and MMOs push towards failure. We also saw limits: two features that mean almost the same thing
+(\code{tag\_Sports} and \code{genre\_Sports}) can get opposite signs, and rare tags get large coefficients.
+This is why $C$ must be tuned in the next step.
+
+% =====================================================================
+\section{Task 5 -- Evaluate initial performance}
+\label{sec:eval}
+
+\subsection{Metrics}
+
+\begin{itemize}
+  \item \textbf{PR-AUC (main metric)}: it measures how well the model ranks the successes first.
+        It is adapted to rare classes. A random model gets the success rate (0.157 on the validation set).
+  \item ROC-AUC: 0.5 for a random model, 1 for a perfect model.
+  \item F1, precision and recall, at the default threshold of 0.5.
+\end{itemize}
+PR-AUC and ROC-AUC are computed on the predicted probabilities, not on the predicted classes.
+We do not use accuracy, because of the class imbalance.
+
+\subsection{Results on the validation set}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l c c c c c c}
+\toprule
+Model & $T$ & PR-AUC & ROC-AUC & F1 & Precision & Recall \\
+\midrule
+Dummy & all & 0.157 & 0.500 & 0.000 & 0.000 & 0.000 \\
+\midrule
+Logistic regression & 0  & 0.407 & 0.765 & 0.405 & 0.303 & 0.613 \\
+Logistic regression & 7  & 0.743 & 0.919 & 0.621 & 0.505 & 0.804 \\
+Logistic regression & 30 & 0.810 & 0.943 & 0.669 & 0.547 & 0.860 \\
+Logistic regression & 90 & 0.850 & 0.959 & 0.705 & 0.586 & 0.885 \\
+\bottomrule
+\end{tabular}
+\caption{Validation results (the test set is not used).}
+\end{table}
+
+\begin{itemize}
+  \item At $T = 0$, with only the information known at release, the model is about 2.6 times better than random (0.407 against 0.157).
+        It finds 61\% of the successes, but with many false alarms (precision 30\%).
+  \item The first reviews help a lot: the PR-AUC jumps from 0.407 to 0.743 at $T = 7$.
+        After that, the gain is smaller. Most of the information arrives in the first week.
+  \item At $T = 30$, the model finds 202 successes out of 235 (recall 86\%), with 167 false alarms (precision 55\%).
+  \item For $T > 0$, part of the score is mechanical: the reviews of the first $T$ days are also counted in the target.
+        This is not leakage (they are known at $T$), but we must keep it in mind.
+  \item Removing the leaking categories lowered the PR-AUC at $T = 0$ from 0.435 to 0.411.
+        With the final split of Module 2, it is 0.407. The lower score is the honest one.
+\end{itemize}
+
+\subsection{Limits}
+
+\begin{itemize}
+  \item The scores have no confidence interval yet. We do not know if a difference of 0.01 is significant.
+  \item The model is linear: it cannot learn thresholds or interactions between features.
+  \item Because of the shift over time, a model trained on years with few successes may underestimate recent games.
+\end{itemize}
+
+% =====================================================================
+\section{Use of AI}
+
+We used an AI assistant to write code. Every answer was checked. All prompts are in \code{PROMPT\_LOG.md}
+and the errors we found are in \code{AI\_AUDIT.md}. The main ones:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+Member & AI error & How we fixed it \\
+\midrule
+Yohan & the whole review file kept in memory, kernel crash & filter each chunk on the sampled games \\
+Jason & helpful votes and hours used as early signals (leakage) & checked the hours, removed both \\
+Jason & language lists read as Python lists, crash & count the commas \\
+Jason & Steam categories added after release kept (leakage) & found with the coefficients, 9 categories removed \\
+Lucas & month and weekday treated as numbers & one-hot encoding in the pipeline \\
+Arthur & games of the same day split between train and validation & cut on the dates, with an assert \\
+\bottomrule
+\end{tabularx}
+\caption{Main AI errors found and fixed.}
+\end{table}
+
+% =====================================================================
+\section{Next steps}
+
+\begin{itemize}
+  \item Tune $C$, then try random forest and gradient boosting, tuned on the validation set (\code{PredefinedSplit}).
+  \item Add an out-of-course model (MLP) with a scientific reference, and a voting ensemble.
+  \item Compute 95\% bootstrap confidence intervals and compare models with a paired test.
+  \item Feature selection inside the pipeline and permutation importance for each $T$.
+  \item Evaluate the final model \textbf{once} on the test set.
+\end{itemize}
+
+\section{Conclusion}
+
+The data is clean, the target is defined without leakage, and the split follows time.
+Our baseline is a logistic regression. It clearly beats the random baseline, even at release time.
+The early reviews improve the results a lot. The audit of the AI code was very useful:
+it found three leaks that would have made our scores look better than they really are.
+
+\end{document}

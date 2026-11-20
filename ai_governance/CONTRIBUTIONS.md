@@ -5,7 +5,7 @@
 | 1 | Données : chargement, nettoyage, fusion | Yohan ALLOUCHE |
 | 2 | Cible et découpage train / validation / test | Arthur <NOM> |
 | 3 | Variables et analyse exploratoire | Jason ZOH |
-| 4 | Baseline et évaluation | |
+| 4 | Baseline et évaluation | Lucas GREZES |
 
 ## Correspondance avec les objectifs de la semaine 2
 

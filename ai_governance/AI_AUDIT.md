@@ -57,6 +57,21 @@
   ```
 - **Impact:** before: crash, no feature file. After: `n_languages` is computed for all 7,797 games present in FronkonGames; on the 7,730 readable lists, the comma count gives exactly the same value as `ast.literal_eval`.
 
+### Flaw 4 – Release month and weekday treated as numbers (Module 4 – Lucas GREZES)
+- **AI output:** the first pipeline put the release month (1–12) and weekday (0–6) in the numerical columns, imputed and scaled like a price:
+  ```python
+  NUM_COLS = ["log_price", "required_age", "n_languages", "release_month", "release_weekday",
+              "desc_length", "n_reviews", "pos_ratio"]
+  ```
+- **Problem:** month and weekday are categories, not quantities. For a logistic regression, a numerical month means "the effect grows linearly from January to December", and December (12) is as far as possible from January (1) although they are consecutive. The model can only learn one slope, not "games released in October–November do better". Root cause: the AI put every column with a numerical dtype in `NUM_COLS` without asking what the number means.
+- **How we detected it:** code review of the pipeline, column by column, before the oral: "what does a one-unit increase of this variable mean?" For `release_month`, the answer makes no sense.
+- **Fix:** one-hot encoding inside the pipeline (fitted on the train only):
+  ```python
+  CAT_COLS = ["release_month", "release_weekday"]
+  (OneHotEncoder(handle_unknown="ignore"), CAT_COLS),
+  ```
+- **Impact:** validation PR-AUC of the logistic regression before the fix: 0.442 (T = 0), 0.751 (T = 7), 0.811 (T = 30), 0.847 (T = 90). After the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). No measurable gain: the differences are below 0.01 and probably within noise (to be confirmed with the bootstrap confidence intervals of Module 2). The release month and weekday carry little signal. The fix is kept because the encoding is now correct and the coefficients can be interpreted month by month. Lesson: a fix can be right without improving the metric.
+
 ### Flaw 5 – Steam categories added after release kept as features → leakage (Module 3 – Jason ZOH)
 - **AI output:** the first Module 3 notebook encoded every category present in at least 1% of the train games, and its leakage audit classified all categories as "kept, low risk":
   ```python
@@ -71,5 +86,4 @@
   ```python
   static = static.drop(columns=late_cols)
   ```
-- **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: <to fill in after re-running 04_baseline.ipynb with the new features>.
-
+- **Impact:** `features_static` goes from 227 to 218 columns. Validation PR-AUC of the logistic regression before the fix: 0.435 (T = 0), 0.748 (T = 7), 0.811 (T = 30), 0.848 (T = 90). After the fix: 0.411 (T = 0), 0.746 (T = 7), 0.812 (T = 30), 0.850 (T = 90). The score at T = 0 drops by 0.024: part of the previous score came from information that is not available at release, so 0.411 is the honest score. At T >= 7 nothing changes, because the early reviews carry much more information than these categories. No removed category appears any more among the strongest coefficients.

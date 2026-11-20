@@ -2,7 +2,7 @@
 
 | Module | Intitulé | Responsable |
 |---|---|---|
-| 1 | Données : chargement, nettoyage, fusion | |
+| 1 | Données : chargement, nettoyage, fusion | Yohan ALLOUCHE |
 | 2 | Cible et découpage train / validation / test | |
 | 3 | Variables et analyse exploratoire | |
 | 4 | Baseline et évaluation | |

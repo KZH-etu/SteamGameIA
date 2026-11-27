@@ -34,7 +34,7 @@ Code: \url{https://github.com/KZH-etu/SteamGameIA}
 \toprule
 Member & Module & Main contributions \\
 \midrule
-Yohan ALLOUCHE & 1 -- Data & Loading 41\,M reviews in chunks, fixing the FronkonGames header, merge, sampling by game \\
+Yohan ALLOUCHE & 1 -- Data & Loading 41\,M reviews in chunks, fixing the FronkonGames header, merge, sampling by game; out-of-course model (MLP) and its references \\
 Arthur DISERBEAU & 2 -- Target and split & One-year target, date-based split, train-only threshold, target analysis \\
 Jason ZOH & 3 -- Features and EDA & Static features, early signals, leakage audit (hours, late Steam categories) \\
 Lucas GREZES & 4 -- Models and evaluation & Pipeline, baselines, grid search, advanced models, ensembles, bootstrap CIs \\
@@ -150,9 +150,32 @@ imbalance, gives probabilities and is interpretable (its coefficients revealed t
         \textbf{no class weighting}: re-weighting helps the 0.5 decision threshold but not the ranking
         measured by the PR-AUC (Figure~\ref{fig:C}).
   \item \textbf{Random forest, HistGradientBoosting, MLP:} \code{RandomizedSearchCV}
-        (8 configurations per model and per $T$, limited budget). The MLP (one or two hidden layers,
-        early stopping) is our out-of-course model.
+        (8 configurations per model and per $T$, limited budget; random search explores more distinct values
+        than a grid for the same budget, Bergstra and Bengio, 2012). The MLP is our out-of-course model
+        (Section~\ref{sec:mlp}).
 \end{itemize}
+
+\subsection{Out-of-course model: multilayer perceptron (Module 1 -- Yohan ALLOUCHE)}\label{sec:mlp}
+The project asks for one algorithm outside the course, justified by a scientific reference. We chose a
+\textbf{multilayer perceptron} (\code{MLPClassifier}): one or two hidden layers of 32 to 128 ReLU units,
+trained with Adam on the log-loss, with an L2 penalty (\code{alpha}) and \code{early\_stopping} on an internal
+10\% split to limit overfitting. It is placed in the same pipeline as the other models (imputation and
+scaling fitted on the training set only), and its size, \code{alpha} and learning rate are tuned on the
+validation set.
+
+\textbf{Why this model, and what we expect.} Neural networks can learn non-linear interactions between
+features without manual feature engineering, which is a natural next step after the logistic regression.
+However, two large benchmarks on tabular data, Grinsztajn, Oyallon and Varoquaux (2022) and Shwartz-Ziv and
+Armon (2022), show that tree-based ensembles (random forests, gradient boosting) usually match or beat deep
+models on medium-sized tabular datasets like ours (7{,}007 training games, about 220 mostly binary features),
+while being cheaper to tune. Their main explanations are that neural networks are biased towards overly smooth
+solutions and are sensitive to uninformative features, which are frequent here (many rare tags).
+We therefore use the MLP as a \emph{comparison}, not as the expected winner.
+(References checked on Google Scholar by Yohan ALLOUCHE.)
+
+\textbf{Result.} The MLP beats the logistic regression (PR-AUC 0.892 against 0.862 at $T = 30$) but stays
+below the tree-based models (0.910--0.915), as predicted by these benchmarks. It is also the least
+interpretable model.
 
 \subsection{Ensembles (lab 6, part II)}
 \begin{itemize}
@@ -245,8 +268,10 @@ independent games, which is only approximate (same publisher, same month), so th
 optimistic.
 
 \subsection{Final evaluation on the test set}
-\TODO{not run yet (week 4). Proposed final model: gradient boosting (same PR-AUC as stacking, 10 times faster,
-simpler). It will be refit on train + validation and evaluated once on the test set, with a bootstrap CI
+\textbf{Final model chosen by the group: gradient boosting} (\code{HistGradientBoostingClassifier}).
+It has the same validation PR-AUC as stacking at $T = 30$ (0.915), its confidence interval overlaps with the
+other top models, it trains about 10 times faster than stacking and it is a single model, simpler to explain
+and to maintain. \TODO{week 4: refit on train + validation and evaluate once on the test set, with a bootstrap CI
 and F1 at the threshold chosen on validation (\code{RUN\_TEST} in notebook 05).}
 
 % =====================================================================
@@ -314,7 +339,7 @@ the errors found are documented in \code{AI\_AUDIT.md} and the critical prompts 
 \end{figure}
 \begin{figure}[p]
   \centering
-  \includegraphics[width=0.85\linewidth]{prauc_vs_T_models_en.png}
+  \includegraphics[width=0.85\linewidth]{prauc_vs_T_models.png}
   \caption{Validation PR-AUC as a function of $T$ for every model, with 95\% bootstrap confidence intervals.}
   \label{fig:prauc}
 \end{figure}

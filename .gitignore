@@ -20,3 +20,7 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
+
+# QUICK smoke test of notebook 05 (not part of the results)
+report/figures/quick/
+notebooks/_quick_test*.ipynb

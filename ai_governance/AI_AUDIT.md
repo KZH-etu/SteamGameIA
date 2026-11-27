@@ -41,7 +41,7 @@
 - **Problem:** filtering on `days < T` only restricts the **date of the review**, not the date at which the other columns were measured. `helpful` is a vote counter read when the dataset was collected, so a review posted on day 3 carries every vote it received in the following years. `hours` has the same problem: it is the playtime at collection time, not at review time. Both features therefore contain information from after T. Root cause: the AI assumed that every column of a review is measured at the review date.
 - **How we detected it:** leakage audit, column by column, asking "is this value known at T?". For `hours`, the describe() of the T = 30 signals showed `hours_mean` up to 903.8 h, more than the 720 h in 30 days. We then checked that 13.6% of the reviews posted in the first 30 days have more hours than the time elapsed since release (`hours > 24 * (days + 1)`), e.g. 149 h two days after release (app 275850).
 - **Fix:** `helpful`, `hours_mean` and `hours_median` are removed. `features_T{7,30,90}` only keep `n_reviews`, `pos_ratio` and `has_reviews`. The check stays in the notebook (section 3).
-- **Impact:** 13.6% of the early reviews (131,855 out of 972,838) had impossible hours, so the hours features mixed future information into 1,701 games. Effect on the model: <to fill in with Module 4: validation PR-AUC at T = 30 with and without the hours features>
+- **Impact:** 13.6% of the early reviews (131,855 out of 972,838) had impossible hours, so the hours features mixed future information into 1,701 games. Effect on the model (measured by Module 4 in `05_models.ipynb`, section 6): adding `hours_mean` and `hours_median` back to the baseline logistic regression at T = 30 gives a validation PR-AUC of 0.809 instead of 0.810 (difference −0.001, paired bootstrap 95% CI [−0.005, +0.003]). The leak was real but carried no measurable signal here; the features stay removed because they are not known at T.
 
 ### Flaw 3 – Language lists parsed with `ast.literal_eval` → crash (Module 3 – Jason ZOH)
 - **AI output:** to count the languages stored as text lists (`"['English', 'French']"`), the AI read each string as a Python list:
@@ -107,3 +107,18 @@
   ```
 - **Impact:** 13 games change split; the splits become 7,007 / 1,499 / 1,494 games instead of 7,000 / 1,500 / 1,500. The threshold stays at 66 reviews and the success rates barely move (13.2% / 15.7% / 14.9%). Small effect here, but the split is now a true cut in time and does not depend on the row order of the file. With this split (read from `target.parquet` by Modules 3 and 4), the validation PR-AUC of the baseline at T = 0 goes from 0.411 to 0.407, and 167 tags are kept instead of 168.
 
+
+### Flaw 7 – Bagging wrapped around the full pipeline → crash, then nested parallelism → CPU saturated (Module 4 – Lucas GREZES)
+- **AI output:** to apply lab 6 (bagging) to the project, the AI wrapped the whole tuned pipeline (preprocessing + logistic regression) in a `BaggingClassifier`, and gave the random forest `n_jobs=-1` inside a `RandomizedSearchCV` that also used `n_jobs=-1`:
+  ```python
+  bag = BaggingClassifier(clone(tuned("LogReg (grid search)", T)), random_state=SEED, n_jobs=-1)
+  RandomForestClassifier(random_state=SEED, n_jobs=-1)   # inside RandomizedSearchCV(..., n_jobs=-1)
+  ```
+- **Problem:** (1) `BaggingClassifier` converts X to a numpy array before calling the inner estimator, so the `ColumnTransformer`, which selects columns by name, fails. Root cause: the AI assumed that a meta-estimator passes the DataFrame unchanged. (2) Each of the 16 search workers started a forest using all 16 cores (16 × 16 threads), so the run never finished. Root cause: the AI applied "use all cores" at both levels without considering the nesting.
+- **How we detected it:** (1) the notebook stopped with `ValueError: Specifying the columns using strings is only supported for dataframes` (found with a reduced run: 2 values of T, 2 configurations). (2) The first full run was still in the random forest section after 10 minutes, with 22 Python processes all busy.
+- **Fix:** the preprocessing is placed **before** the bagging step, and the forest uses one core per search job:
+  ```python
+  bag = make_pipeline(make_preprocess(d["df"]), BaggingClassifier(clone(lr_best), random_state=SEED, n_jobs=-1))
+  RandomForestClassifier(random_state=SEED, n_jobs=1)
+  ```
+- **Impact:** before: crash, then a run that did not end. After: the whole notebook runs in about 19 minutes. Bagging of the logistic regression gives the same validation PR-AUC as the tuned logistic regression (0.862 at T = 30), as expected for a low-variance model.

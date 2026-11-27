@@ -18,6 +18,7 @@ Placer les fichiers sources dans `data/raw/` (non versionnés) :
 | Dossier / fichier | Contenu |
 |---|---|
 | `config.py` | Chemins, SEED, constantes |
+| `main.py` | Relance les notebooks dans l'ordre (01 → 04) |
 | `notebooks/01_data.ipynb` | Module 1 – chargement, nettoyage, fusion |
 | `notebooks/02_target_split.ipynb` | Module 2 – cible et découpage temporel |
 | `notebooks/03_features_eda.ipynb` | Module 3 – variables et EDA |
@@ -26,6 +27,15 @@ Placer les fichiers sources dans `data/raw/` (non versionnés) :
 | `ai_governance/` | CONTRIBUTIONS, PROMPT_LOG, AI_AUDIT |
 
 Voir `REPARTITION_MODULES.md` pour la répartition et les règles.
+
+## Relancer tout le pipeline
+Chaque notebook lit les fichiers écrits par les précédents dans `data/processed/` (01 → 02 → 03 → 04).
+Après une modification, relancer le notebook modifié **et tous ceux qui suivent** :
+```bash
+python main.py       # tout relancer, de 01 à 04 (01 a besoin de data/raw/)
+python main.py 03    # relancer à partir de 03 (03 puis 04)
+```
+Les notebooks sont réécrits avec leurs nouveaux résultats. Le script s'arrête au premier notebook qui échoue.
 
 ## Workflow Git
 Chaque responsable travaille sur **sa branche** et ne pousse jamais directement sur `main`.

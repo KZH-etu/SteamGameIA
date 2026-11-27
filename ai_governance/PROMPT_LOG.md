@@ -1,7 +1,7 @@
 # Prompt Log
 
-<!-- Modèle d'entrée :
-### Entry N – <titre> (Module X – <prénom>)
+<!-- Entry template:
+### Entry N – <title> (Module X – <first name>)
 - **Goal:** ...
 - **Bare prompt (v1):** "..."  → problem with the answer: ...
 - **Constrained prompt (v2):** "..." (schema, leakage boundaries, assumptions, fallback)

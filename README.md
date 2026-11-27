@@ -1,6 +1,6 @@
-# SteamGameIA – Prédiction du succès d'un jeu Steam
+# SteamGameIA – Predicting the success of a Steam game
 
-Prédire si un jeu Steam sera un succès un an après sa sortie, c'est-à-dire s'il est dans le top 20 % en nombre d'avis **et** a au moins 80 % d'avis positifs. On utilise les informations connues à la sortie et les premiers signaux observés à T = 0, 7, 30 et 90 jours.
+Predict whether a Steam game will be a success one year after its release, i.e. whether it is in the top 20% for the number of reviews **and** has at least 80% positive reviews. We use the information known at release and the first signals observed at T = 0, 7, 30 and 90 days.
 
 ## Installation
 ```bash
@@ -9,50 +9,50 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Données
-Placer les fichiers sources dans `data/raw/` (non versionnés) :
+## Data
+Put the source files in `data/raw/` (not versioned):
 - FronkonGames – Steam Games Dataset
 - Kozyriev – `games.csv`, `recommendations.csv`, `games_metadata.json`
 
 ## Structure
-| Dossier / fichier | Contenu |
+| Folder / file | Content |
 |---|---|
-| `config.py` | Chemins, SEED, constantes |
-| `main.py` | Relance les notebooks dans l'ordre (01 → 04) |
-| `notebooks/01_data.ipynb` | Module 1 – chargement, nettoyage, fusion |
-| `notebooks/02_target_split.ipynb` | Module 2 – cible et découpage temporel |
-| `notebooks/03_features_eda.ipynb` | Module 3 – variables et EDA |
-| `notebooks/04_baseline.ipynb` | Module 4 – baseline et évaluation |
-| `report/` | Rapport final |
+| `config.py` | Paths, SEED, constants |
+| `main.py` | Reruns the notebooks in order (01 → 04) |
+| `notebooks/01_data.ipynb` | Module 1 – loading, cleaning, merging |
+| `notebooks/02_target_split.ipynb` | Module 2 – target and time-based split |
+| `notebooks/03_features_eda.ipynb` | Module 3 – features and EDA |
+| `notebooks/04_baseline.ipynb` | Module 4 – baseline and evaluation |
+| `report/` | Final report |
 | `ai_governance/` | CONTRIBUTIONS, PROMPT_LOG, AI_AUDIT |
 
-Voir `REPARTITION_MODULES.md` pour la répartition et les règles.
+See `MODULES.md` for the work split and the rules.
 
-## Relancer tout le pipeline
-Chaque notebook lit les fichiers écrits par les précédents dans `data/processed/` (01 → 02 → 03 → 04).
-Après une modification, relancer le notebook modifié **et tous ceux qui suivent** :
+## Rerun the whole pipeline
+Each notebook reads the files written by the previous ones in `data/processed/` (01 → 02 → 03 → 04).
+After a change, rerun the modified notebook **and all the ones after it**:
 ```bash
-python main.py       # tout relancer, de 01 à 04 (01 a besoin de data/raw/)
-python main.py 03    # relancer à partir de 03 (03 puis 04)
+python main.py       # rerun everything, from 01 to 04 (01 needs data/raw/)
+python main.py 03    # rerun from 03 (03 then 04)
 ```
-Les notebooks sont réécrits avec leurs nouveaux résultats. Le script s'arrête au premier notebook qui échoue.
+The notebooks are rewritten with their new results. The script stops at the first notebook that fails.
 
-## Workflow Git
-Chaque responsable travaille sur **sa branche** et ne pousse jamais directement sur `main`.
+## Git workflow
+Each owner works on **their own branch** and never pushes directly to `main`.
 
-| Branche | Module |
+| Branch | Module |
 |---|---|
-| `module1-data` | 1 – Données |
-| `module2-target` | 2 – Cible et découpage |
-| `module3-features` | 3 – Variables et EDA |
-| `module4-baseline` | 4 – Baseline et évaluation |
+| `module1-data` | 1 – Data |
+| `module2-target` | 2 – Target and split |
+| `module3-features` | 3 – Features and EDA |
+| `module4-baseline` | 4 – Baseline and evaluation |
 
 ```bash
-git switch module1-data            # se placer sur sa branche
-git pull origin main               # récupérer les derniers merges (avant de commencer)
-# ... travail, commits réguliers ...
+git switch module1-data            # move to your branch
+git pull origin main               # get the latest merges (before starting)
+# ... work, regular commits ...
 git push -u origin module1-data
 ```
-Quand le module est prêt : ouvrir une Pull Request vers `main`, la faire relire par un autre membre, puis merger.
-Les modules dépendent les uns des autres (1 → 2 → 3 → 4) : merger dans cet ordre et faire `git pull origin main` sur sa branche après chaque merge.
-Pour limiter les conflits, chacun ne modifie que **son notebook** ; les changements de `config.py` ou `requirements.txt` sont annoncés au groupe. Dans `ai_governance/`, chacun ajoute ses entrées à la fin du fichier, ce qui limite les conflits.
+When the module is ready: open a Pull Request to `main`, have it reviewed by another member, then merge.
+The modules depend on each other (1 → 2 → 3 → 4): merge in this order and run `git pull origin main` on your branch after each merge.
+To limit conflicts, everyone only edits **their own notebook**; changes to `config.py` or `requirements.txt` are announced to the group. In `ai_governance/`, everyone adds their entries at the end of the file, which limits conflicts.

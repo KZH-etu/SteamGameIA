@@ -1,11 +1,11 @@
-# Données brutes (trop lourdes pour git, à télécharger : voir README)
+# Raw data (too large for git, to download: see README)
 data/raw/*
 !data/raw/.gitkeep
 
-# Données traitées : versionnées, sauf le fichier d'avis (trop lourd, partagé sur le Drive)
+# Processed data: versioned, except the review file (too large, shared on the Drive)
 data/processed/reviews_clean.parquet
 
-# Environnements Python
+# Python environments
 .venv/
 venv/
 env/

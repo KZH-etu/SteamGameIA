@@ -37,7 +37,7 @@ Member & Module & Main contributions \\
 Yohan ALLOUCHE & 1 -- Data & Loading 41\,M reviews in chunks, fixing the FronkonGames header, merge, sampling by game; out-of-course model (MLP) and its references \\
 Arthur DISERBEAU & 2 -- Target and split & One-year target, date-based split, train-only threshold, target analysis \\
 Jason ZOH & 3 -- Features and EDA & Static features, early signals, leakage audit (hours, late Steam categories) \\
-Lucas GREZES & 4 -- Models and evaluation & Pipeline, baselines, grid search, advanced models, ensembles, bootstrap CIs \\
+Lucas GREZES & 4 -- Models and evaluation & Pipeline, baselines, grid search, advanced models, ensembles, bootstrap CIs; feature selection notebook (step 3) \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -260,6 +260,26 @@ F1 is computed at the default 0.5 threshold. Models trained without class weight
 probabilities at $T = 0$, so their F1 at 0.5 is very low (0.06 for the random forest) although their
 PR-AUC is the best: the threshold must be chosen on the validation set before using F1.
 
+\subsection{Feature selection and importance per $T$ (lab 4, Module 3 scope)}
+Notebook \code{06\_feature\_selection.ipynb}; every selection step is inside the pipeline, fitted on the
+training set only (selecting on the whole dataset would use the labels of the validation and test games).
+\begin{itemize}
+  \item \textbf{Filter method} (\code{SelectKBest} with mutual information, $k$ tuned on validation):
+        keeping fewer features never helps. At $T = 0$ the PR-AUC drops from 0.448 (all features) to 0.388
+        with 10 features; at $T \geq 7$ the curve is almost flat (0.854 with 10 features against 0.862 with
+        all at $T = 30$), because two features carry most of the signal.
+  \item \textbf{Embedded method} (L1 logistic regression of the grid search): the lasso keeps 131 of 233
+        features at $T = 0$, but only 36, 33 and 88 at $T = 7, 30, 90$, with the same PR-AUC: once early
+        reviews are available, most store features become redundant.
+  \item \textbf{Permutation importance of the final model} (gradient boosting, validation set,
+        10 repetitions, Figure~\ref{fig:imp}): at $T = 0$ the importance is spread over many weak store
+        features (number of languages, Steam Cloud, price, single-player tag). From $T = 7$, the number of
+        early reviews (PR-AUC drop of 0.66 to 0.73 when shuffled) and their share of positive reviews
+        (0.22 to 0.29) dominate; every other feature is below 0.005.
+\end{itemize}
+These results confirm the main finding: the first week of reviews matters much more than anything known at
+release, partly because the target is itself defined from the number and share of positive reviews.
+
 \subsection{Uncertainty}
 The validation set contains 1{,}499 games and about 235 successes, so a difference of 0.01 in PR-AUC can be
 noise. We resample the validation games 1{,}000 times (bootstrap) to get 95\% confidence intervals, and
@@ -342,6 +362,12 @@ the errors found are documented in \code{AI\_AUDIT.md} and the critical prompts 
   \includegraphics[width=0.85\linewidth]{prauc_vs_T_models.png}
   \caption{Validation PR-AUC as a function of $T$ for every model, with 95\% bootstrap confidence intervals.}
   \label{fig:prauc}
+\end{figure}
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.95\linewidth]{permutation_importance.png}
+  \caption{Permutation importance of the final gradient boosting model on the validation set, at $T = 0$ and $T = 30$.}
+  \label{fig:imp}
 \end{figure}
 
 \end{document}

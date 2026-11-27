@@ -18,12 +18,13 @@ Put the source files in `data/raw/` (not versioned):
 | Folder / file | Content |
 |---|---|
 | `config.py` | Paths, SEED, constants |
-| `main.py` | Reruns the notebooks in order (01 → 05) |
+| `main.py` | Reruns the notebooks in order (01 → 06) |
 | `notebooks/01_data.ipynb` | Module 1 – loading, cleaning, merging |
 | `notebooks/02_target_split.ipynb` | Module 2 – target and time-based split |
 | `notebooks/03_features_eda.ipynb` | Module 3 – features and EDA |
 | `notebooks/04_baseline.ipynb` | Module 4 – baseline and evaluation |
-| `notebooks/05_models.ipynb` | Module 4 (step 3) – grid search, random forest, gradient boosting, MLP, voting / bagging / stacking, bootstrap CIs |
+| `notebooks/05_models.ipynb` | Module 4 (step 3) – grid search, random forest, gradient boosting, MLP, voting / bagging / stacking, bootstrap CIs. `QUICK = True` = smoke test in ~3 min |
+| `notebooks/06_feature_selection.ipynb` | Module 3 scope (step 3) – SelectKBest, L1 selection, permutation importance per T of the final model |
 | `report/` | Final report |
 | `ai_governance/` | CONTRIBUTIONS, PROMPT_LOG, AI_AUDIT |
 

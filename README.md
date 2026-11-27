@@ -26,8 +26,9 @@ Put the source files in `data/raw/` (not versioned):
 | `notebooks/05_models.ipynb` | Week 3 – grid search, decision tree, random forest, gradient boosting, MLP, SVM, bagging / voting / stacking, bootstrap CIs |
 | `notebooks/06_feature_selection.ipynb` | Week 3 – feature selection (filter, embedded, wrapper) and permutation importance |
 | `notebooks/07_error_analysis.ipynb` | Week 3 – error analysis of the best model |
-| `report/` | Final report |
+| `report/` | Week 2 and week 3 reports (`week3_report.pdf`, built from `week3_report.html`), final report (LaTeX, week 4) |
 | `ai_governance/` | CONTRIBUTIONS, PROMPT_LOG, AI_AUDIT |
+| `docs/revision/` | Revision notes: `00_common.md` for everyone, then one file per member |
 
 See `MODULES.md` for the work split and the rules.
 

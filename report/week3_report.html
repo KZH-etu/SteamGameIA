@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Week 3 Report</title>
+<style>
+  @page { size: A4; margin: 1.8cm 2cm; }
+  body { font-family: "Cambria", "Georgia", serif; font-size: 10.5pt; line-height: 1.38; color: #000; margin: 0; }
+  h1 { font-size: 15pt; text-align: center; margin: 0 0 4px; }
+  .authors { text-align: center; margin: 0; }
+  .sub { text-align: center; font-size: 9.5pt; margin: 2px 0 12px; }
+  h2 { font-size: 12.5pt; margin: 14px 0 5px; }
+  p { margin: 4px 0; text-align: justify; }
+  ul { margin: 3px 0; padding-left: 20px; }
+  li { margin: 2px 0; text-align: justify; }
+  code { font-family: Consolas, monospace; font-size: 9pt; }
+  table { border-collapse: collapse; margin: 6px auto; font-size: 9pt; }
+  th, td { padding: 2px 7px; text-align: center; }
+  th { border-bottom: 1px solid #000; }
+  thead tr:first-child th { border-top: 1.5px solid #000; }
+  tbody tr:last-child td { border-bottom: 1.5px solid #000; }
+  td:first-child, th:first-child { text-align: left; }
+  td:not(:first-child), th:not(:first-child) { white-space: nowrap; }
+  .left td, .left th { white-space: normal !important; }
+  tr.sep td { border-top: 1px solid #000; }
+  .left td { text-align: left; }
+  figure { margin: 8px 0; text-align: center; page-break-inside: avoid; }
+  figure img { max-width: 100%; }
+  figcaption { font-size: 9pt; margin-top: 2px; }
+  .avoid { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>Predicting the Success of Steam Games – Week 3 Report</h1>
+<p class="authors">Yohan ALLOUCHE &nbsp;&nbsp; Arthur DISERBEAU &nbsp;&nbsp; Jason ZOH &nbsp;&nbsp; Lucas GREZES</p>
+<p class="sub">ESILV A4 – Machine Learning – November 2026 – Code: https://github.com/KZH-etu/SteamGameIA (notebooks 05, 06, 07)</p>
+
+<p><b>Goal.</b> We predict if a Steam game will be a success one year after its release (top 20% for the number of
+reviews in its first year <b>and</b> at least 80% positive reviews), at <i>T</i> = 0 (release) and <i>T</i> = 7, 30 and
+90 days. Week 2 gave a clean dataset of 10,000 games, a time-based split (7,007 / 1,499 / 1,494 games) and a baseline:
+a logistic regression with a validation PR-AUC of 0.407, 0.743, 0.810 and 0.850 (random model: 0.157). This week we
+develop and compare other models. Owners: logistic regression tuning, SVM and ensembles (Lucas); decision tree, random
+forest and uncertainty (Arthur); gradient boosting and error analysis (Yohan); MLP and feature selection (Jason).</p>
+
+<h2>1 Select and implement Machine Learning models (all)</h2>
+<p>Every model is a scikit-learn <code>Pipeline</code>: median imputation and scaling of the numerical features,
+one-hot encoding of release month and weekday, fitted on the training set only. One model per <i>T</i>.</p>
+<table class="left">
+<thead><tr><th>Model</th><th>Why we test it</th><th>Owner</th></tr></thead>
+<tbody>
+<tr><td>Logistic regression (tuned)</td><td>the baseline itself: is it only badly regularised?</td><td>Lucas</td></tr>
+<tr><td>Decision tree</td><td>non-linear and readable as rules; shows bias / variance with the depth</td><td>Arthur</td></tr>
+<tr><td>Random forest</td><td>bagging of trees: reduces the variance of a single tree</td><td>Arthur</td></tr>
+<tr><td>Gradient boosting (<code>HistGradientBoosting</code>)</td><td>boosting of small trees: reduces the bias; strong on tabular data</td><td>Yohan</td></tr>
+<tr><td>MLP (out-of-course model)</td><td>a neural network as a comparison point (1–2 hidden layers, early stopping)</td><td>Jason</td></tr>
+<tr><td>SVM (RBF kernel)</td><td>lab 6: maximum margin with a curved boundary</td><td>Lucas</td></tr>
+<tr><td>Bagging (logistic regression, tree, SVM)</td><td>lab 6: does averaging copies trained on samples help each model?</td><td>Lucas</td></tr>
+<tr><td>Soft voting, stacking</td><td>lab 6: combine the best models (LR + RF + GB), and bagged SVM + bagged tree</td><td>Lucas</td></tr>
+</tbody>
+</table>
+
+<h2>2 Train and evaluate the models (Lucas, Arthur)</h2>
+<ul>
+<li><b>Validation scheme.</b> All choices are made on our <b>time-based validation set</b> (games released after the
+training games), through <code>PredefinedSplit</code>: a random <i>k</i>-fold would mix past and future games.
+<code>refit=False</code>, then the best configuration is refit on the training set only (with a predefined split,
+<code>refit=True</code> would retrain on train + validation and the validation score would be lost).</li>
+<li><b>Metric.</b> PR-AUC (<code>average_precision</code>), because only 15.7% of the validation games are successes
+(accuracy of “always failure”: 84%). ROC-AUC, F1, precision, recall, fit and predict times are also reported.</li>
+<li><b>Uncertainty.</b> 1,000 bootstrap resamples of the validation games give a 95% CI of each PR-AUC, and a
+<b>paired</b> comparison with the baseline (both models on the same resampled games).</li>
+<li><b>Test set not used.</b> It will be used once, in week 4, for the final model only.</li>
+</ul>
+
+<h2>3 Experiment with hyperparameter tuning and feature selection (all)</h2>
+<p><b>Tuning.</b> Full grid for the logistic regression, the tree and the SVM; random search (8 configurations per
+model and per <i>T</i>, limited budget) for the random forest, gradient boosting, MLP; grid on
+<code>n_estimators</code> and <code>max_samples</code> for bagging.</p>
+<ul>
+<li><b>Logistic regression</b> (<i>C</i> from 0.01 to 3, L1 or L2, class weights): at every <i>T</i> the search picks
+an <b>L1 penalty</b>, a stronger regularisation (<i>C</i> = 0.1 to 0.3 instead of 1) and no class weighting. Gain
+over the baseline: 0.810 → 0.862 at <i>T</i> = 30.</li>
+<li><b>Decision tree</b> (depth, leaf size, criterion): with one game per leaf allowed, the validation PR-AUC peaks
+at depth 5 (≈ 0.87) and falls to ≈ 0.63 for an unlimited depth while the train PR-AUC reaches 1: textbook
+overfitting (Figure 1). The best tree (depth 12, ≥ 50 games per leaf) reaches 0.901 at <i>T</i> = 30.</li>
+<li><b>Grid edges.</b> In the first run, the best regularisation of the gradient boosting (<code>l2_regularization</code>)
+and of the MLP (<code>alpha</code>) was the largest value tested; both grids were widened up to 10. Changes:
+−0.003 to +0.008, within noise; the gradient boosting now picks 10 at <i>T</i> = 30 and 90, again the edge.</li>
+</ul>
+<figure>
+<img src="figures/tree_depth.png" style="width:55%">
+<figcaption>Figure 1 – Train and validation PR-AUC of a decision tree at <i>T</i> = 30 as a function of its depth (one game per leaf allowed): bias on the left, variance on the right.</figcaption>
+</figure>
+
+<p><b>Feature selection (lab 4, notebook 06).</b> Each selector is placed <b>inside</b> the pipeline, between the
+preprocessing and the baseline logistic regression (selecting on all the data first would leak the validation games
+into the choice). At <i>T</i> = 30, every family beats the baseline with all 236 features (0.810): about 10 features are
+enough to reach 0.84 and the L1 selection (<code>SelectFromModel</code>) keeps 33 features for 0.852. At <i>T</i> = 0, only
+L1 (67 features, 0.466) and RFE (50–100 features, 0.43) beat the baseline (0.407), within its interval [0.34, 0.47]; the
+mutual information filter never does. The baseline overfits its ≈ 230 sparse 0/1 features, which is also why the grid
+search chose L1. <b>Permutation importance</b> of a gradient boosting (validation set): at <i>T</i> = 30, shuffling the
+number of early reviews costs ≈ 0.71 of PR-AUC and their share of positive reviews ≈ 0.27, every other feature
+&lt; 0.01; at <i>T</i> = 0, the number of languages, Steam Cloud and the price matter most (drops of 0.03 to 0.06).</p>
+
+<h2>4 Compare results against the baseline (Lucas, Arthur)</h2>
+<div class="avoid">
+<table>
+<thead>
+<tr><th>Validation PR-AUC</th><th><i>T</i> = 0</th><th><i>T</i> = 7</th><th><i>T</i> = 30</th><th><i>T</i> = 90</th><th>Gain at <i>T</i> = 30<br>[95% CI]</th></tr>
+</thead>
+<tbody>
+<tr><td>Logistic regression (week 2 baseline)</td><td>0.407</td><td>0.743</td><td>0.810</td><td>0.850</td><td>–</td></tr>
+<tr><td>Logistic regression (tuned)</td><td>0.456</td><td>0.821</td><td>0.862</td><td>0.885</td><td>+0.052 [0.032, 0.074]</td></tr>
+<tr><td>Bagging of logistic regressions</td><td>0.451</td><td>0.822</td><td>0.862</td><td>0.884</td><td>+0.052 [0.033, 0.074]</td></tr>
+<tr><td>SVM (RBF)</td><td>0.428</td><td>0.810</td><td>0.846</td><td>0.873</td><td>+0.035 [0.014, 0.059]</td></tr>
+<tr><td>Bagging of SVMs</td><td>0.351</td><td>0.700</td><td>0.769</td><td>0.855</td><td>−0.041 [−0.080, −0.007]</td></tr>
+<tr><td>Decision tree</td><td>0.402</td><td>0.837</td><td>0.901</td><td>0.925</td><td>+0.091 [0.057, 0.130]</td></tr>
+<tr><td>Bagging of trees</td><td>0.449</td><td>0.862</td><td>0.916</td><td>0.944</td><td>+0.106 [0.074, 0.142]</td></tr>
+<tr><td>Soft voting (bagged SVM + bagged tree)</td><td>0.461</td><td>0.854</td><td>0.904</td><td>0.932</td><td>+0.093 [0.065, 0.124]</td></tr>
+<tr><td>MLP</td><td>0.448</td><td>0.853</td><td>0.895</td><td>0.922</td><td>+0.084 [0.060, 0.112]</td></tr>
+<tr><td>Random forest</td><td>0.489</td><td>0.866</td><td>0.910</td><td>0.944</td><td>+0.100 [0.069, 0.138]</td></tr>
+<tr><td><b>Gradient boosting</b></td><td>0.483</td><td><b>0.875</b></td><td><b>0.917</b></td><td><b>0.946</b></td><td>+0.107 [0.076, 0.142]</td></tr>
+<tr><td>Soft voting (LR + RF + GB)</td><td>0.495</td><td>0.872</td><td>0.914</td><td>0.945</td><td>+0.104 [0.075, 0.139]</td></tr>
+<tr><td>Stacking (LR + RF + GB)</td><td><b>0.496</b></td><td>0.872</td><td>0.915</td><td><b>0.946</b></td><td>+0.105 [0.077, 0.141]</td></tr>
+<tr class="sep"><td>95% CI of the best model</td><td>[0.43, 0.56]</td><td>[0.84, 0.90]</td><td>[0.89, 0.94]</td><td>[0.92, 0.96]</td><td></td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><b>Significant gains.</b> The tuned logistic regression, the random forest, the gradient boosting and the two
+ensembles of the best models beat the baseline at every <i>T</i> (CI of the gain above 0). The tree-based models gain the
+most: +0.08 to +0.13 of PR-AUC. At <i>T</i> = 0, the gains of the single tree, the bagged tree, the SVM and the MLP
+are not significant.</li>
+<li><b>No clear winner at the top</b> (Figure 2). At <i>T</i> = 30, gradient boosting, bagged trees, stacking, voting and random
+forest are within 0.007 and their intervals overlap widely: we cannot rank them. Ensembles do not beat the best
+single model.</li>
+<li><b>Bagging helps high-variance models only.</b> Trees: 0.901 → 0.916; logistic regression: no change (0.862).
+For the SVM it is worse (0.846 → 0.769): the SVM copies are trained without probabilities, so the bagged probability
+is a vote of 10 SVMs with only 11 possible values, which breaks the ranking measured by the PR-AUC.</li>
+<li><b>Trade-off at <i>T</i> = 30.</b> Fit time on a laptop CPU: decision tree 0.2 s, bagged trees 1.2 s, gradient
+boosting 8 s, random forest 10 s, SVM 19 s, stacking 49 s. The single tree (0.901) is the best interpretable model;
+the tuned logistic regression (0.862) remains the model to explain the effect of each feature.</li>
+<li><b>Proposed final model:</b> gradient boosting (best at <i>T</i> = 7 and 30, tied with stacking at <i>T</i> = 90,
+about 6 times faster than stacking and simpler).</li>
+</ul>
+
+<figure>
+<img src="figures/prauc_vs_T_models.png" style="width:88%">
+<figcaption>Figure 2 – Validation PR-AUC as a function of <i>T</i> for every model, with 95% bootstrap confidence
+intervals; dashed line: random model. Most of the gain comes from the first week of reviews.</figcaption>
+</figure>
+
+<h2>5 Analyze errors and identify potential limitations (Yohan)</h2>
+<p>Gradient boosting at <i>T</i> = 30, validation set, threshold 0.5 (notebook 07, the model is not retrained):
+208 true positives, 86 false alarms, 27 missed successes, 1,178 true negatives.</p>
+<ul>
+<li><b>Errors sit at the threshold of the target.</b> No error on the 324 games without any review in their first
+year and 2.3% on games with 1–32 reviews, but 31.8% between 33 and 65 reviews (41 false alarms) and 20.4% between 66
+and 131. Part of the error comes from the hard 66-review threshold, not from the model.</li>
+<li><b>False alarms.</b> 57 stay below 66 reviews; 29 have enough reviews but end below 80% positive. Their share of
+positive reviews drops on average from 0.895 at <i>T</i> = 30 to 0.851 after one year: games criticised later,
+which cannot be seen at <i>T</i> = 30.</li>
+<li><b>Missed successes start slowly:</b> median of 17 reviews in the first month (115.5 for the true positives) and
+77% positive (93%). Several are free games whose share of positive reviews rose above 80% over the year.</li>
+<li><b>Free games are the hardest</b> (10.0% of errors, against 8.1% at a price of 10 or more and 6.2% below 10),
+although their success rate is close to that of games at 10 or more (21.1% vs 22.4%).</li>
+</ul>
+<figure>
+<img src="figures/errors_by_group.png" style="width:95%">
+<figcaption>Figure 3 – Error rate (false alarms + missed successes) of the gradient boosting at <i>T</i> = 30, by genre (genres with at least 50 games) and by base price.</figcaption>
+</figure>
+
+<p><b>Limitations.</b> One validation set of 1,499 games (≈ 235 successes): intervals are wide, and comparing
+13 models on it makes the best score slightly optimistic (the test set will give the unbiased estimate). The
+bootstrap assumes independent games (same publishers, same months: the intervals are rather optimistic). The random
+search only tries 8 configurations, and one gradient boosting parameter is still on the edge of its grid. F1 uses the
+default 0.5 threshold, which must be chosen on validation. Part of the gain from <i>T</i> = 0 to 7 is mechanical (the
+first reviews also count in the target). Store data (tags, categories) describe the game today, not at release; the
+leaking columns found so far were removed (week 2).</p>
+
+<p><b>Next steps (week 4).</b> Choose the threshold on validation, evaluate the gradient boosting once on the test
+set with a bootstrap CI, fix the bagged SVM (SVMs with probabilities), final report and presentation.</p>
+<p><b>Use of AI.</b> We used an AI assistant for code and checked every answer. This week, three new errors were found
+and documented in <code>AI_AUDIT.md</code> (bagging wrapped around the whole pipeline and nested parallelism; search
+grids whose best value was on the edge; bagged SVM scored with votes); the critical prompts are in
+<code>PROMPT_LOG.md</code> (entries 6 to 9).</p>
+
+</body>
+</html>

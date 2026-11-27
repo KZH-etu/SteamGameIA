@@ -1,0 +1,29 @@
+model,T,gain,gain_low,gain_high,significant
+LogReg (grid search),0,0.0489,0.0224,0.0753,True
+LogReg (grid search),7,0.0781,0.0522,0.1056,True
+LogReg (grid search),30,0.0517,0.032,0.0736,True
+LogReg (grid search),90,0.0356,0.0215,0.0511,True
+Random forest,0,0.0819,0.0277,0.1353,True
+Random forest,7,0.1224,0.0836,0.1628,True
+Random forest,30,0.1002,0.0686,0.1378,True
+Random forest,90,0.0946,0.0627,0.1292,True
+Gradient boosting,0,0.0782,0.0324,0.123,True
+Gradient boosting,7,0.1276,0.0907,0.1684,True
+Gradient boosting,30,0.1046,0.0732,0.1426,True
+Gradient boosting,90,0.0912,0.0604,0.127,True
+MLP,0,0.0371,0.0018,0.0732,True
+MLP,7,0.101,0.0737,0.1322,True
+MLP,30,0.0811,0.0541,0.11,True
+MLP,90,0.0649,0.0392,0.0933,True
+Voting (LR+RF+GB),0,0.0858,0.0493,0.1232,True
+Bagging (LogReg),0,0.0452,0.0203,0.0686,True
+Stacking,0,0.0925,0.0521,0.1337,True
+Voting (LR+RF+GB),7,0.1293,0.0957,0.1675,True
+Bagging (LogReg),7,0.0788,0.054,0.1051,True
+Stacking,7,0.1301,0.0956,0.1683,True
+Voting (LR+RF+GB),30,0.1045,0.0758,0.1387,True
+Bagging (LogReg),30,0.0523,0.0333,0.0736,True
+Stacking,30,0.1054,0.0763,0.1411,True
+Voting (LR+RF+GB),90,0.093,0.0658,0.1261,True
+Bagging (LogReg),90,0.0342,0.0207,0.0484,True
+Stacking,90,0.0958,0.0681,0.1287,True

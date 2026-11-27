@@ -3,27 +3,47 @@ LogReg (grid search),0,0.0489,0.0224,0.0753,True
 LogReg (grid search),7,0.0781,0.0522,0.1056,True
 LogReg (grid search),30,0.0517,0.032,0.0736,True
 LogReg (grid search),90,0.0356,0.0215,0.0511,True
+Decision tree,0,-0.0049,-0.0652,0.0547,False
+Decision tree,7,0.0933,0.0533,0.1354,True
+Decision tree,30,0.0912,0.0575,0.1297,True
+Decision tree,90,0.0756,0.0411,0.111,True
 Random forest,0,0.0819,0.0277,0.1353,True
 Random forest,7,0.1224,0.0836,0.1628,True
 Random forest,30,0.1002,0.0686,0.1378,True
 Random forest,90,0.0946,0.0627,0.1292,True
-Gradient boosting,0,0.0782,0.0324,0.123,True
-Gradient boosting,7,0.1276,0.0907,0.1684,True
-Gradient boosting,30,0.1046,0.0732,0.1426,True
-Gradient boosting,90,0.0912,0.0604,0.127,True
-MLP,0,0.0371,0.0018,0.0732,True
-MLP,7,0.101,0.0737,0.1322,True
-MLP,30,0.0811,0.0541,0.11,True
-MLP,90,0.0649,0.0392,0.0933,True
-Voting (LR+RF+GB),0,0.0858,0.0493,0.1232,True
+Gradient boosting,0,0.0749,0.0289,0.1239,True
+Gradient boosting,7,0.131,0.0926,0.1727,True
+Gradient boosting,30,0.1072,0.0759,0.1424,True
+Gradient boosting,90,0.0959,0.0652,0.1294,True
+MLP,0,0.0395,-0.0005,0.0795,False
+MLP,7,0.1096,0.0814,0.14,True
+MLP,30,0.0843,0.0597,0.1124,True
+MLP,90,0.0721,0.0451,0.102,True
+SVM,0,0.0221,-0.0098,0.0527,False
+SVM,7,0.0657,0.0393,0.0959,True
+SVM,30,0.0351,0.0137,0.0592,True
+SVM,90,0.0222,-0.0088,0.0507,False
+Bagging (SVM),0,-0.0585,-0.1031,-0.0185,False
+Bagging (tree),0,0.0412,-0.0181,0.1016,False
+Voting (bagged SVM + tree),0,0.0531,-0.0012,0.1084,False
+Bagging (SVM),7,-0.0435,-0.0842,-0.005,False
+Bagging (tree),7,0.1189,0.0818,0.1602,True
+Voting (bagged SVM + tree),7,0.1106,0.078,0.1483,True
+Bagging (SVM),30,-0.0413,-0.0799,-0.0074,False
+Bagging (tree),30,0.106,0.0737,0.1424,True
+Voting (bagged SVM + tree),30,0.0933,0.0646,0.1239,True
+Bagging (SVM),90,0.0045,-0.0261,0.0365,False
+Bagging (tree),90,0.0941,0.0644,0.1278,True
+Voting (bagged SVM + tree),90,0.082,0.054,0.113,True
+Voting (LR+RF+GB),0,0.0869,0.0539,0.1224,True
 Bagging (LogReg),0,0.0452,0.0203,0.0686,True
-Stacking,0,0.0925,0.0521,0.1337,True
-Voting (LR+RF+GB),7,0.1293,0.0957,0.1675,True
+Stacking,0,0.0876,0.046,0.13,True
+Voting (LR+RF+GB),7,0.1281,0.0938,0.1661,True
 Bagging (LogReg),7,0.0788,0.054,0.1051,True
-Stacking,7,0.1301,0.0956,0.1683,True
-Voting (LR+RF+GB),30,0.1045,0.0758,0.1387,True
+Stacking,7,0.1287,0.0936,0.1678,True
+Voting (LR+RF+GB),30,0.1038,0.0755,0.1389,True
 Bagging (LogReg),30,0.0523,0.0333,0.0736,True
-Stacking,30,0.1054,0.0763,0.1411,True
-Voting (LR+RF+GB),90,0.093,0.0658,0.1261,True
+Stacking,30,0.1054,0.0766,0.1409,True
+Voting (LR+RF+GB),90,0.0947,0.0664,0.1281,True
 Bagging (LogReg),90,0.0342,0.0207,0.0484,True
-Stacking,90,0.0958,0.0681,0.1287,True
+Stacking,90,0.0965,0.0676,0.1304,True

@@ -1,18 +1,19 @@
-"""Rerun the whole pipeline: execute the notebooks in order (01 -> 05).
+"""Rerun the whole pipeline: execute the notebooks in order (01 -> 07).
 
 Each notebook reads the files written by the previous ones in data/processed/,
 so a change in one notebook requires rerunning all the notebooks after it.
 
 Usage:
-    python main.py       # rerun everything, from 01 to 05
-    python main.py 04    # rerun from 04 (04 then 05)
+    python main.py       # rerun everything, from 01 to 07
+    python main.py 05    # rerun from 05 (05, 06 then 07)
 """
 import subprocess
 import sys
 
 from config import ROOT
 
-NOTEBOOKS = ["01_data", "02_target_split", "03_features_eda", "04_baseline", "05_models"]
+NOTEBOOKS = ["01_data", "02_target_split", "03_features_eda", "04_baseline", "05_models",
+             "06_feature_selection", "07_error_analysis"]
 
 start = sys.argv[1] if len(sys.argv) > 1 else "01"
 todo = [nb for nb in NOTEBOOKS if nb[:2] >= start]

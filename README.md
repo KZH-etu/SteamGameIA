@@ -18,23 +18,25 @@ Put the source files in `data/raw/` (not versioned):
 | Folder / file | Content |
 |---|---|
 | `config.py` | Paths, SEED, constants |
-| `main.py` | Reruns the notebooks in order (01 → 05) |
+| `main.py` | Reruns the notebooks in order (01 → 07) |
 | `notebooks/01_data.ipynb` | Module 1 – loading, cleaning, merging |
 | `notebooks/02_target_split.ipynb` | Module 2 – target and time-based split |
 | `notebooks/03_features_eda.ipynb` | Module 3 – features and EDA |
 | `notebooks/04_baseline.ipynb` | Module 4 – baseline and evaluation |
-| `notebooks/05_models.ipynb` | Module 4 (step 3) – grid search, random forest, gradient boosting, MLP, voting / bagging / stacking, bootstrap CIs |
+| `notebooks/05_models.ipynb` | Week 3 – grid search, decision tree, random forest, gradient boosting, MLP, SVM, bagging / voting / stacking, bootstrap CIs |
+| `notebooks/06_feature_selection.ipynb` | Week 3 – feature selection (filter, embedded, wrapper) and permutation importance |
+| `notebooks/07_error_analysis.ipynb` | Week 3 – error analysis of the best model |
 | `report/` | Final report |
 | `ai_governance/` | CONTRIBUTIONS, PROMPT_LOG, AI_AUDIT |
 
 See `MODULES.md` for the work split and the rules.
 
 ## Rerun the whole pipeline
-Each notebook reads the files written by the previous ones in `data/processed/` (01 → 02 → 03 → 04).
+Each notebook reads the files written by the previous ones in `data/processed/` (01 → 02 → … → 07).
 After a change, rerun the modified notebook **and all the ones after it**:
 ```bash
-python main.py       # rerun everything, from 01 to 04 (01 needs data/raw/)
-python main.py 03    # rerun from 03 (03 then 04)
+python main.py       # rerun everything, from 01 to 07 (01 needs data/raw/)
+python main.py 05    # rerun from 05 (05, 06 then 07)
 ```
 The notebooks are rewritten with their new results. The script stops at the first notebook that fails.
 

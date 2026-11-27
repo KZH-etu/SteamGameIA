@@ -122,3 +122,29 @@
   RandomForestClassifier(random_state=SEED, n_jobs=1)
   ```
 - **Impact:** before: crash, then a run that did not end. After: the whole notebook runs in about 19 minutes. Bagging of the logistic regression gives the same validation PR-AUC as the tuned logistic regression (0.862 at T = 30), as expected for a low-variance model.
+
+### Flaw 8 – Search grids whose best value was on the edge (Week 3 – Yohan ALLOUCHE, Jason ZOH)
+- **AI output:** the random search grids of the first version of `05_models.ipynb` stopped at `l2_regularization` = 1 for the gradient boosting and `alpha` = 1 for the MLP:
+  ```python
+  "histgradientboostingclassifier__l2_regularization": [0, 0.1, 1],
+  "mlpclassifier__alpha": [1e-4, 1e-3, 1e-2, 1e-1, 1],
+  ```
+- **Problem:** the best configuration found used the largest value of the grid: `l2_regularization = 1` at T = 0, 7 and 30, `alpha = 1` at T = 7, 30 and 90. When the best value is on the edge, a stronger regularisation could be better and the search cannot tell. Root cause: the AI chose "usual" ranges without checking the selected values afterwards.
+- **How we detected it:** reading the best parameters printed by the search for each T.
+- **Fix:** the grids are widened on the side where the best value was:
+  ```python
+  "histgradientboostingclassifier__l2_regularization": [0, 0.1, 1, 10],
+  "mlpclassifier__alpha": [1e-3, 1e-2, 1e-1, 1, 3, 10],
+  ```
+- **Impact:** validation PR-AUC of the gradient boosting 0.915 → 0.917 (T = 30) and 0.941 → 0.946 (T = 90); MLP 0.892 → 0.895 (T = 30) and 0.915 → 0.922 (T = 90). Over all T, the changes go from −0.003 (gradient boosting at T = 0: 0.486 → 0.483) to +0.008 (MLP at T = 7: 0.845 → 0.853). The MLP now picks `alpha = 3` (inside the grid). The gains are small, inside the bootstrap intervals, and the random search draws 8 other configurations from the new grid, so they cannot be attributed to the edge alone. The gradient boosting now picks `l2_regularization = 10` at T = 30 and 90, again the edge: a limitation to keep in mind.
+
+### Flaw 9 – Bagged SVM scored with votes → only 11 distinct probabilities (Week 3 – Lucas GREZES)
+- **AI output:** to keep the run time reasonable, the tuned SVM was copied into the bagging without probabilities:
+  ```python
+  bases = {"Bagging (SVM)": clone(MODELS[("SVM", T)][-1]).set_params(probability=False), ...}
+  bag = make_pipeline(make_preprocess(d["df"]), BaggingClassifier(base, random_state=SEED, n_jobs=-1))
+  ```
+- **Problem:** an `SVC` without `probability=True` has no `predict_proba`, so `BaggingClassifier` estimates the probability as the share of SVMs that vote "success". With 10 SVMs, a game can only get 11 values (0, 0.1, …, 1): many games are tied and the PR-AUC, which depends on the ranking, collapses. Root cause: the AI optimised the run time without checking what the model returns to the metric.
+- **How we detected it:** the bagged SVM is the only model below the baseline (0.769 at T = 30, against 0.846 for a single SVM and 0.810 for the baseline). In `val_proba.parquet`, it has 11 distinct probabilities for 1,499 validation games at T = 30 (1,449 for the single SVM, 1,426 for the gradient boosting).
+- **Fix:** not applied before the deadline. The bagged SVM (and the vote that uses it) is reported as a negative result and is not a candidate for the final model. Proposed fix: bag `SVC(probability=True)` (or `CalibratedClassifierCV(SVC(), ensemble=False)`) with the best configuration only, to limit the run time.
+- **Impact:** bagged SVM 0.769 vs single SVM 0.846 at T = 30; the gap shrinks at T = 90 with 25 SVMs (26 possible values): 0.855 vs 0.873. The vote "bagged SVM + bagged tree" (0.904) stays below the bagged tree alone (0.916).

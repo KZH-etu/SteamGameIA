@@ -1,0 +1,322 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\setlist{itemsep=1pt, topsep=2pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\newcommand{\code}[1]{\texttt{#1}}
+% Placeholder for the numbers of notebook 05 (filled once the run is finished)
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+\graphicspath{{figures/}}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{Predicting the Success of Steam Games\\from their First Days after Release}}\\[8pt]
+{\large Yohan ALLOUCHE \quad Arthur DISERBEAU \quad Jason ZOH \quad Lucas GREZES}\\[4pt]
+ESILV A4 -- Data \& AI -- Machine Learning project -- November 2026\\[2pt]
+Code: \url{https://github.com/KZH-etu/SteamGameIA}
+\end{center}
+
+\begin{center}
+\small
+\begin{tabular}{l l p{8.6cm}}
+\toprule
+Member & Module & Main contributions \\
+\midrule
+Yohan ALLOUCHE & 1 -- Data & Loading 41\,M reviews in chunks, fixing the FronkonGames header, merge, sampling by game \\
+Arthur DISERBEAU & 2 -- Target and split & One-year target, date-based split, train-only threshold, target analysis \\
+Jason ZOH & 3 -- Features and EDA & Static features, early signals, leakage audit (hours, late Steam categories) \\
+Lucas GREZES & 4 -- Models and evaluation & Pipeline, baselines, grid search, advanced models, ensembles, bootstrap CIs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% =====================================================================
+\section{Business scope}
+
+Thousands of games are released on Steam every year and only a few succeed. After the release, a studio
+must decide quickly whether to keep investing in a game (updates, marketing, DLC). Sales are not public,
+but user reviews are, and the number of reviews is a standard proxy for popularity.
+\textbf{Question:} using the information available $T$ days after release ($T = 0, 7, 30, 90$), can we
+predict whether a game will be a success one year after its release, and how early is the prediction
+reliable enough to support a decision?
+
+% =====================================================================
+\section{Problem formalisation}
+
+\textbf{Target (Module 2).} A game is a \emph{success} if, during its first year, it is in the
+\textbf{top 20\%} of games by number of reviews \textbf{and} has \textbf{at least 80\%} positive reviews.
+The top-20\% threshold is computed on the training set only (66 reviews in the first year).
+
+\textbf{Task.} Binary classification. Inputs: (1) store information known at release (price, platforms,
+languages, release month and weekday, description length, genres, categories and tags) and (2) for
+$T > 0$, the reviews of the first $T$ days (number of reviews, share of positive reviews).
+Output: the probability that the game is a success.
+
+\textbf{Metric.} About one game in seven is a success, so accuracy is misleading (always answering
+``failure'' gives about 85\%). The main metric is the \textbf{PR-AUC} (average precision) computed on the
+predicted probabilities; a random model scores the positive rate of the evaluated set (0.157 on validation).
+ROC-AUC, F1, precision and recall are also reported.
+
+% =====================================================================
+\section{Data (Module 1 -- Yohan ALLOUCHE)}
+
+\begin{itemize}
+  \item \textbf{Game Recommendations on Steam} (A.~Kozyriev, Kaggle): 41\,M dated user reviews of
+        50{,}872 games, from 2010 to 31/12/2022.
+  \item \textbf{Steam Games Dataset} (FronkonGames, Kaggle): store metadata of 125{,}855 games.
+        A broken header (\code{DiscountDLC count}) shifted every column after \code{Price}: without the
+        fix, no game matched; after the fix, 77.5\% of the Kozyriev games are found.
+  \item \textbf{Scope:} games released between 2015 and 2021 (a full year of reviews is needed),
+        \textbf{10{,}000 games sampled by game} (seed 42): sampling review rows would change the target.
+  \item \textbf{Reviews:} \code{days} = review date $-$ release date; the 6.45\% of reviews with
+        \code{days} $< 0$ (early access) are removed. 6{,}833{,}248 reviews remain.
+\end{itemize}
+
+% =====================================================================
+\section{Features, missing values and leakage (Module 3 -- Jason ZOH)}
+
+\textbf{Static features} (known at release): log price, free, platforms, required age, number of
+languages, release month and weekday, log description length, and genres / categories / tags as 0/1
+columns (tags kept if present in $\geq 1\%$ of the \emph{training} games).
+\textbf{Early signals} for $T = 7, 30, 90$: number of reviews and share of positive reviews before $T$.
+
+\textbf{Missing values.} FronkonGames columns are empty for about 22\% of the games (same rate in the
+three splits); an \code{in\_fronkon} flag is added. The share of positive reviews is empty when a game has
+no review before $T$; it is imputed inside the model pipeline (median, fitted on the training set).
+
+\textbf{Leakage audit.} A feature is kept only if it is known at prediction time. Removed: rating,
+positive ratio, final price, discount, DLC count, release year; \code{helpful} votes and \code{hours}
+played (measured at collection time: 13.6\% of the first-month reviews have more hours than the time since
+release); and 9 Steam categories added after release (\emph{Remote Play Together}, created in 2019, appears
+on 10.5\% of the 2015 games).
+
+% =====================================================================
+\section{Training, validation and test sets (Module 2 -- Arthur DISERBEAU)}
+
+The games are split \textbf{by release date}: the model must predict future games from past ones.
+Games released on the same day stay in the same split. All choices (features, hyperparameters, models)
+are made on the validation set; the \textbf{test set is used once}, at the very end.
+
+\begin{center}
+\small
+\begin{tabular}{l l r r}
+\toprule
+Split & Release dates & Games & Success rate \\
+\midrule
+Train (70\%) & 2015-01-01 to 2020-05-20 & 7{,}007 & 13.2\% \\
+Validation (15\%) & 2020-05-21 to 2021-03-29 & 1{,}499 & 15.7\% \\
+Test (15\%) & 2021-03-30 to 2021-12-31 & 1{,}494 & 14.9\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The success rate drops in 2017--2018 and rises again from 2019 (distribution shift), so every model is
+compared with the random baseline of the same split.
+
+% =====================================================================
+\section{Models (Module 4 -- Lucas GREZES)}
+
+\subsection{Pipeline and baselines}
+One dataset per $T$. A scikit-learn \code{Pipeline} fitted on the training set only: median imputation and
+\code{StandardScaler} for numerical features, \code{OneHotEncoder} for month and weekday (categories, not
+quantities), 0/1 features unchanged. Fitting the imputer or the scaler before the split would leak
+validation information into training.
+Baselines: \code{DummyClassifier} (always ``failure'') and a logistic regression
+(\code{class\_weight="balanced"}), chosen as reference because it beats the Dummy at every $T$, handles the
+imbalance, gives probabilities and is interpretable (its coefficients revealed the late Steam categories).
+
+\subsection{Hyperparameter search (lab 6, part II)}
+\begin{itemize}
+  \item \textbf{Validation scheme:} \code{PredefinedSplit} on our time-based validation set, not a random
+        $k$-fold (which would mix past and future games). \code{refit=False}: with a predefined split,
+        \code{refit=True} would retrain on train + validation and the validation score would be lost.
+  \item \textbf{Scoring:} \code{average\_precision} (PR-AUC), not accuracy.
+  \item \textbf{Logistic regression:} grid search on $C \in \{0.01, \dots, 3\}$, L1 or L2 penalty
+        (\code{l1\_ratio}, solver \code{saga}) and \code{class\_weight}.
+        At every $T$ the search selects an \textbf{L1 penalty} (sparse model, implicit feature selection),
+        a stronger regularisation than the baseline ($C = 0.1$ to $0.3$ instead of $1$) and
+        \textbf{no class weighting}: re-weighting helps the 0.5 decision threshold but not the ranking
+        measured by the PR-AUC (Figure~\ref{fig:C}).
+  \item \textbf{Random forest, HistGradientBoosting, MLP:} \code{RandomizedSearchCV}
+        (8 configurations per model and per $T$, limited budget). The MLP (one or two hidden layers,
+        early stopping) is our out-of-course model.
+\end{itemize}
+
+\subsection{Ensembles (lab 6, part II)}
+\begin{itemize}
+  \item \textbf{Soft voting:} average of the probabilities of the tuned logistic regression, random
+        forest and gradient boosting.
+  \item \textbf{Bagging} of the tuned logistic regression (\code{n\_estimators}, \code{max\_samples}
+        tuned); the random forest is already a bagging of trees.
+  \item \textbf{Stacking:} a logistic regression learns how to combine the three models from out-of-fold
+        predictions (5 folds without shuffling on games sorted by release date).
+\end{itemize}
+
+% =====================================================================
+\section{Results}
+
+\subsection{Baselines (validation)}
+\begin{center}
+\small
+\begin{tabular}{l c c c c c c}
+\toprule
+Model & $T$ & PR-AUC & ROC-AUC & F1 & Precision & Recall \\
+\midrule
+Dummy & all & 0.157 & 0.500 & 0.000 & 0.000 & 0.000 \\
+Logistic regression & 0  & 0.407 & 0.765 & 0.405 & 0.303 & 0.613 \\
+Logistic regression & 7  & 0.743 & 0.919 & 0.621 & 0.505 & 0.804 \\
+Logistic regression & 30 & 0.810 & 0.943 & 0.669 & 0.547 & 0.860 \\
+Logistic regression & 90 & 0.850 & 0.959 & 0.705 & 0.586 & 0.885 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Advanced models and ensembles}
+Validation PR-AUC with 95\% bootstrap confidence intervals (random level: 0.157), see also Figure~\ref{fig:prauc}:
+
+\begin{center}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+Model & $T = 0$ & $T = 7$ & $T = 30$ & $T = 90$ \\
+\midrule
+Logistic regression (week 2 baseline) & 0.407 & 0.743 & 0.810 & 0.850 \\
+Logistic regression (grid search)     & 0.456 & 0.821 & 0.862 & 0.885 \\
+Bagging of logistic regressions       & 0.451 & 0.822 & 0.862 & 0.884 \\
+MLP (out-of-course model)             & 0.445 & 0.845 & 0.892 & 0.915 \\
+Random forest                         & 0.489 & 0.866 & 0.910 & 0.944 \\
+Gradient boosting                     & 0.486 & 0.871 & \textbf{0.915} & 0.941 \\
+Soft voting (LR + RF + GB)            & 0.493 & 0.873 & 0.914 & 0.943 \\
+Stacking (LR + RF + GB)               & \textbf{0.501} & \textbf{0.874} & \textbf{0.915} & \textbf{0.946} \\
+\midrule
+95\% CI of the best model             & [0.43, 0.57] & [0.84, 0.90] & [0.89, 0.94] & [0.92, 0.96] \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Paired bootstrap against the week 2 baseline.} Every model is significantly better than the
+baseline at every $T$ (the 95\% interval of the gain is above 0). The tree-based models and the
+ensembles gain the most: +0.08 to +0.13 PR-AUC (e.g.\ gradient boosting at $T = 30$: +0.105,
+CI [0.073, 0.143]). The tuned logistic regression gains +0.05 to +0.08. Between the four best models
+(random forest, gradient boosting, voting, stacking) the differences are below 0.015 and their intervals
+overlap widely: \textbf{we cannot rank them}.
+
+\textbf{Comparison at $T = 30$} (validation; times on a laptop CPU, 7{,}007 training games):
+
+\begin{center}
+\small
+\begin{tabular}{l c c c c l}
+\toprule
+Model & PR-AUC & ROC-AUC & F1 & Fit (s) & Interpretability \\
+\midrule
+Stacking & 0.915 & 0.973 & 0.834 & 17.9 & low \\
+Gradient boosting & 0.915 & 0.974 & 0.835 & 1.7 & low (feature importances) \\
+Soft voting & 0.914 & 0.972 & 0.835 & 7.3 & low \\
+Random forest & 0.910 & 0.973 & 0.838 & 5.8 & low (feature importances) \\
+MLP & 0.892 & 0.967 & 0.806 & 1.5 & very low (black box) \\
+Logistic regression (grid search) & 0.862 & 0.956 & 0.786 & 1.0 & high (coefficients) \\
+Bagging of logistic regressions & 0.862 & 0.957 & 0.780 & 59.3 & medium \\
+Logistic regression (baseline) & 0.810 & 0.943 & 0.669 & 0.2 & high (coefficients) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+F1 is computed at the default 0.5 threshold. Models trained without class weighting give low
+probabilities at $T = 0$, so their F1 at 0.5 is very low (0.06 for the random forest) although their
+PR-AUC is the best: the threshold must be chosen on the validation set before using F1.
+
+\subsection{Uncertainty}
+The validation set contains 1{,}499 games and about 235 successes, so a difference of 0.01 in PR-AUC can be
+noise. We resample the validation games 1{,}000 times (bootstrap) to get 95\% confidence intervals, and
+compare each model with the baseline \emph{on the same resampled games} (paired bootstrap). This assumes
+independent games, which is only approximate (same publisher, same month), so the intervals are rather
+optimistic.
+
+\subsection{Final evaluation on the test set}
+\TODO{not run yet (week 4). Proposed final model: gradient boosting (same PR-AUC as stacking, 10 times faster,
+simpler). It will be refit on train + validation and evaluated once on the test set, with a bootstrap CI
+and F1 at the threshold chosen on validation (\code{RUN\_TEST} in notebook 05).}
+
+% =====================================================================
+\section{Obstacles and how we handled them}
+\begin{itemize}
+  \item \textbf{Memory:} the 2\,GB review file crashed the kernel; each chunk is now filtered before
+        being kept (Module 1).
+  \item \textbf{Leakage:} hours played, helpful votes and late Steam categories removed (Module 3);
+        imputation and scaling inside the pipeline (Module 4); threshold on train only (Module 2).
+  \item \textbf{Imbalance:} PR-AUC as main metric, \code{class\_weight}, comparison with the random level.
+  \item \textbf{Same-day games split between train and validation:} cut on dates (Module 2).
+  \item \textbf{Bagging and column names:} \code{BaggingClassifier} converts the data to arrays and breaks the
+        column-based preprocessing; the preprocessing is placed before the bagging step (Module 4).
+  \item \textbf{Hours played leak, measured:} adding back the mean and median hours at $T = 30$ changes the
+        baseline PR-AUC by $-0.001$ (CI [$-0.005$, $+0.003$]): the leak was real but carried no signal here.
+  \item \textbf{Nested parallelism:} a random forest using all cores inside a parallel random search
+        saturated the CPU; the forest now uses one core per search job.
+  \item \textbf{Over/underfitting:} regularisation of the logistic regression chosen on validation
+        (Figure~\ref{fig:C}), early stopping for the MLP, \code{min\_samples\_leaf} and depth for the trees.
+\end{itemize}
+
+% =====================================================================
+\section{Discussion and conclusion}
+\begin{itemize}
+  \item At release ($T = 0$), store information alone is 2.6 times better than random, but with many false
+        alarms: it can rank games, not decide alone.
+  \item One week of reviews makes the PR-AUC jump from 0.41 to 0.74; the gain is smaller afterwards.
+        Part of it is mechanical (the first reviews also count in the target): not leakage, but the
+        question ``how early'' must be read with this in mind.
+  \item Non-linear models clearly help: at $T = 30$, gradient boosting reaches a PR-AUC of 0.915 against
+        0.862 for the tuned logistic regression. A likely reason is that the target is itself a threshold
+        on the number of reviews, which trees model directly.
+  \item Ensembles (voting, stacking) do not significantly beat the best single model: gradient boosting
+        is the best trade-off between performance, training time and simplicity. The logistic regression
+        remains the model to explain \emph{why} a game succeeds.
+  \item \textbf{Limitations:} reviews are a sample and only a proxy of sales; 22\% of the games are missing
+        from FronkonGames; current store pages (tags, categories) may differ from release day;
+        10{,}000 games out of 35{,}588 to keep the computation short.
+\end{itemize}
+
+\textbf{Use of AI.} We used an AI assistant to write and review code. Every answer was checked;
+the errors found are documented in \code{AI\_AUDIT.md} and the critical prompts in \code{PROMPT\_LOG.md}.
+
+% =====================================================================
+\section*{References}
+\begin{itemize}
+  \item A.~Kozyriev, \emph{Game Recommendations on Steam}, Kaggle dataset.
+  \item FronkonGames, \emph{Steam Games Dataset}, Kaggle dataset.
+  \item J.~Bergstra, Y.~Bengio (2012). Random search for hyper-parameter optimization. \emph{JMLR} 13.
+  \item L.~Grinsztajn, E.~Oyallon, G.~Varoquaux (2022). Why do tree-based models still outperform deep
+        learning on typical tabular data? \emph{NeurIPS Datasets and Benchmarks}.
+  \item R.~Shwartz-Ziv, A.~Armon (2022). Tabular data: Deep learning is not all you need.
+        \emph{Information Fusion} 81.
+  \item T.~Saito, M.~Rehmsmeier (2015). The precision-recall plot is more informative than the ROC plot
+        when evaluating binary classifiers on imbalanced datasets. \emph{PLoS ONE} 10(3).
+  \item F.~Pedregosa et al. (2011). Scikit-learn: Machine learning in Python. \emph{JMLR} 12.
+\end{itemize}
+
+% Figures (generated by notebooks/05_models.ipynb)
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.6\linewidth]{logreg_C.png}
+  \caption{Validation and train PR-AUC of the logistic regression as a function of $C$ (bias / variance).}
+  \label{fig:C}
+\end{figure}
+\begin{figure}[p]
+  \centering
+  \includegraphics[width=0.85\linewidth]{prauc_vs_T_models_en.png}
+  \caption{Validation PR-AUC as a function of $T$ for every model, with 95\% bootstrap confidence intervals.}
+  \label{fig:prauc}
+\end{figure}
+
+\end{document}
